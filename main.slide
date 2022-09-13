@@ -283,7 +283,7 @@ reliance on the order of the fields in the struct type declaration makes them
 - less expressive (harder to write and read)
 - brittle to changes in the declaration (addition of a field, re-ordering of the fields)
 
-`go vet` is your friend!
+`go`vet` is your friend!
 
 : error-prone
 : In struct literals, you can either specify all the...
@@ -440,6 +440,21 @@ and
 
 * Functional options to the rescue (cont'd)
 
+At the top of the `Open` function, range over the specific options and apply each one:
+
+  func Open(addr string, opts ...Option) (*Connection, error) {
+    var options options
+    for _, o := range opts {
+      o.apply(&options)
+    }
+    // if some options are mutually incompatible, return an error
+    // otherwise, open the connection with the specified options
+  }
+
+
+
+* Functional options to the rescue (cont'd)
+
 Then, clients of your package are free to specify only the options they need:
 
   db.Open(addr)
@@ -484,6 +499,8 @@ Because the signature of `Open` doesn't change, you'll only need to release a ne
 Go takes a lightweight but powerful approach to documentation: the documentation of a package is simply written as comments in the package's source file(s).
 
 Document your packages and everything it exports. [[https://go.dev/blog/godoc][Follow the conventions]].
+
+`golint`./...` will tell you (among other things) which symbols are exported but not documented.
 
 You can also write [[https://go.dev/blog/examples][executable examples]], which become part of your package's documentation and test suite.
 
