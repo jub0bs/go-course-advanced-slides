@@ -1,0 +1,2820 @@
+Formation Go avancé
+13 September 2022
+
+Julien Cretel
+jcretel-infosec@protonmail.com
+https://jub0bs.com
+@jub0bs
+
+* Setup
+
+- Go 1.19.x
+- Visual Studio Code
+- [[https://code.visualstudio.com/docs/languages/go][Go extension for Visual Studio Code]]
+- Git
+
+* Overview of the Namecheck project
+
+
+* Optimize your code for reading
+
+
+
+* Use constants provided by packages you import
+
+Critique the following code snippet. What would you improve?
+
+.code src/magicnumbers/magicnumbers.go /^//START/,/^//END/
+
+
+
+* Use constants provided by packages you import
+
+Many packages, such as the `http` package, provide useful constants. Use them!
+
+.code src/magicnumbers/nomagicnumbers.go /^//START/,/^//END/
+
+Using constants clarifies your code and reduces the risk for programming errors.
+
+However, don't import packages _just_ for using the constants they export.
+
+
+
+* Declare your own clarifying variables and constants
+
+A nameless value is [[https://www.youtube.com/watch?v=5DVV36uqQ4E&t=925s][confusing]]:
+
+  for i := 0; i < 16; i++ {
+    go worker(results, job)
+  }
+
+How could you improve things?
+
+
+
+* Declare your own clarifying variables and constants (cont'd)
+
+Document a value's meaning through a clarifying identifier:
+
+  const nbWorkers = 16
+  for i := 0; i < nbWorkers; i++ {
+    go worker(results, job)
+  }
+
+Apply the same principle to channel capacities, slice lengths and capacities, etc.
+
+: ignore objections about the value only being used once
+: channel capacity often influences correctness and performance of a programme
+
+
+
+* Avoid reflect and unsafe
+
+*reflect*
+
+Using the `reflect` package is difficult, leads to unreadable code, and often creates performance issues.
+
+*unsafe*
+
+`unsafe` is excluded from the [[https://go.dev/doc/go1compat#expectations][Go 1 compatibility guarantee]]. Importing the `unsafe` package therefore makes your code likely to break with a future release.
+
+Resources:
+
+- [[https://www.youtube.com/watch?v=PAAkCSZUG1c&t=925s][Rob Pike about the `reflect` package]]
+- [[https://www.youtube.com/watch?v=ZJFMvWHtSAA][James Bowes - Shattered Mirror: An Introduction to Reflect and Unsafe (dotGo 2019)]].
+
+: if you must use those packages, don't let it leak through your API
+
+
+
+* API design
+
+
+* What is a good API?
+
+A good API
+
+- is easy to use but [[https://www.youtube.com/watch?v=aAb7hSCtvGw&t=6m][hard to misuse]],
+- meets its current requirements but is flexible enough to meet anticipated future requirements.
+
+Here are some general principles and specific techniques for designing good APIs in Go.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/friends/stovepipe-hat.svg 200 _
+
+
+
+* Encapsulate your types judiciously
+
+Well-encapsulated types are harder to misuse and easier to evolve over time.
+
+For designing a type that provides behaviors and needs to maintain _invariants_, strive for an _opaque_struct_:
+
+- use a struct as the underlying type,
+- keep its fields unexported,
+- provide methods to operate on your type.
+
+
+
+* Encapsulate your types judiciously (cont'd)
+
+If instantiating your type requires some configuration, export _factory_function(s)_ for it.
+
+An example from the `regexp` package:
+
+  type Regexp struct {
+      // contains filtered or unexported fields
+  }
+
+  func Compile(expr string) (*Regexp, error)
+
+: case first letter of an identifier determines whether exported or not
+
+
+
+* Exercise: encapsulate a bidirectional-map type
+
+A bidirectional map, i.e. an associative data structure in which the key-value pairs
+form a one-to-one correspondence.
+
+1. Open `go-course-advanced/src/bidirectionalmap` in VS Code.
+
+2. `Bimap` implements a bidirectional map from strings to strings with O(1) access.
+
+3. Review its implementation. What bothers you? How would you improve it?
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Use separate types for data-transfer objects
+
+Not all types can or should be fully encapsulated. In particular, package such as `encoding/json` require you to export struct fields.
+
+However, resist the temptation to design your business types as mere "property bags" and to use them through all the layers (from presentation to storage) of your application.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/friends/stovepipe-hat-front.svg 300 _
+
+: using the same type throughout couples your database schema to the representations
+: encapsulation and security issues (mass assignment)
+: unlikely to be the bottleneck
+
+
+* Use separate types for data-transfer objects (cont'd)
+
+Instead, in addition to well-encapsulated business types,
+
+  type User struct {
+    id        int64
+    email     string
+    password  string
+    isAdmin    bool
+    created    time.Time
+    updated    time.Time
+    lastSeenAt time.Time
+  }
+
+declare DTO types for command and queries to and results from your API:
+
+  type UserSearchHitDTO struct {
+    Id            int64                `json:"id"`
+    Email         string               `json:"email"`
+    AvatarUrl     string               `json:"avatarUrl"`
+    IsAdmin       bool                 `json:"isAdmin"`
+    LastSeenAt    time.Time            `json:"lastSeenAt"`
+  }
+
+
+
+* Make the zero value useful
+
+There is no such thing as an uninitialized variable in Go. Every type has a _zero_value_.
+
+For many types, the zero value is readily usable without explicit initialization:
+you can simply declare a variable of that type and you safely call its methods.
+
+Some examples and counterexamples from the core library:
+
+  // types whose zero value is readily usable
+  bytes.Buffer
+  sync.WaitGroup
+  sync.Mutex
+  http.Client
+
+  // type whose zero value is NOT readily usable
+  regexp.Regexp
+
+Try to [[https://www.youtube.com/watch?v=PAAkCSZUG1c&t=6m25s][design your types so that the zero value be readily usable]].
+
+
+
+* Why make the zero value useful?
+
+*Convenience*
+
+The zero-value-is-useful property is [[https://go.dev/doc/effective_go#allocation_new][transitive]]: if all the fields of a struct type have a useful zero value, then so does that struct type!
+
+  type SyncedBuffer struct {
+      lock    sync.Mutex
+      buffer  bytes.Buffer
+  }
+
+The need for factory functions is reduced, which leads to a smaller API.
+
+*Correctness*
+
+There's no such thing as constructors in Go.
+
+If you export a type, clients can instantiate the type in its zero value. Therefore,
+making the zero value well-behaved renders the type harder to misuse.
+
+: transitive because a struct's zero value has all the fields zeroed
+: no way in Go to export a type but prevent people from creating the zero value of that type.
+: However, making the zero value useful isn't always possible, esp. for types whose instantiation require some configuration.
+
+
+
+* How to make the zero value useful
+
+Approaches to making a type's zero value useful vary.
+
+Sometimes, you can simply modify the type's structure.
+
+In most cases, you need to lazily initializing fields within methods on that type.
+
+
+
+* Exercise: make Bimap's zero value useful
+
+1. Re-open `go-course-advanced/src/bidirectionalmap` in VS Code.
+
+2. Is `Bimap`'s zero value usable?
+
+3. If not, make it usable and get rid of factory function `New`.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* What if making the zero value useful isn't possible?
+
+For some types, instantiation requires additional information that only clients can provide. Making their zero value useful isn't possible.
+
+When the zero value of your type isn't usable, document it!
+
+Instruct your clients to instantiate the type via a factory function.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/witch-learning.svg 200 _
+
+
+
+* Avoid unkeyed literals
+
+Consider this struct type declaration:
+
+.code -edit src/unkeyed_literals.go /^//START1/,/^//END1/
+
+Here are examples of an unkeyed literal and a keyed literal:
+
+.play -edit src/unkeyed_literals.go /^//START2/,/^//END2/
+
+You should avoid unkeyed literals (esp. of third-party types) because their
+reliance on the order of the fields in the struct type declaration makes them
+
+- less expressive (harder to write and read)
+- brittle to changes in the declaration (addition of a field, re-ordering of the fields)
+
+`go vet` is your friend!
+
+: error-prone
+: In struct literals, you can either specify all the...
+: why error prone: easier to swap the fields,
+: won't be affected by reordering of the fields in the type declaration
+
+
+
+* Trick for disallowing unkeyed struct literals
+
+Adding an unexported field of type `struct{}` prevents clients of your package
+from using unkeyed literals of your type:
+
+.play -edit src/unkeyed_literals_disallow.go /^//START/,/^//END/
+
+You can always "hide" the existence of that unsightly unexported field by declaring an appropriate `String` method for your type:
+
+  func (l Location) String() string {
+    const tmpl = "%f°N, %f°W"
+    return fmt.Sprintf(tmpl, l.Lat, l.Long)
+  }
+
+: why empty struct{}? memory-efficient!
+
+
+
+* Avoid global state
+
+Maintaining state at the package level is a [[https://twitter.com/peterbourgon/status/1133492111012184064][recipe for disaster]].
+
+Values of struct types can be stateful; packages shouldn't.
+
+Stay away from `init` functions (if you can).
+
+Don't emulate the _registration_pattern_ (as implemented by the `database/sql` package).
+
+
+
+* Dependency injection
+
+Of course, you shouldn't hardcode dependencies,  since it
+
+- creates too much coupling,
+- hinders testability.
+
+Instead, simply provide dependencies through interface-type fields on your struct types. If no appropriate interface type is available, define your own!
+
+See how the `namecheck` project uses this approach to inject a HTTP client.
+
+No need for dependency-injection frameworks in Go! Interfaces are enough!
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/king.svg 200 _
+
+
+
+* Functional options: a motivational example
+
+Imagine you're developing a library that provides a function named `Open`, which tries to connect to a database:
+
+  func Open(addr string, cache bool, logger log.Logger) (*Connection, error)
+
+An address must always be specified; callers must also specify whether they wish to use caching and/or a logger.
+
+Remember that Go has no support for optional parameters: callers of a function must provide one argument per parameter. Why, then, is `Open`'s signature problematic?
+
+
+
+* Functional options: a motivational example (cont'd)
+
+Clients of your package who don't need caching and/or a logger are forced to pass no-op arguments to `Open`:
+
+  db.Open(addr, db.DefaultCache, zap.NewNop())
+  db.Open(addr, db.DefaultCache, log)
+  db.Open(addr, false, zap.NewNop())
+  db.Open(addr, false, log)
+
+Moreover, you cannot easily evolve `Open`'s API. For instance, if you're using [[https://semver.org/][semantic versioning]], adding a parameter to the `Open` function would require the release of a new major version of your library:
+
+  func Open(addr string, cache bool, logger log.Logger, timeout time.Duration) (*Connection, error)
+
+
+
+* Functional options: a motivational example (cont'd)
+
+One solution would be to provide a variant for each possible combination, but the resulting API is unwieldy:
+
+  func Open(addr string) (*Connection, error)
+  func OpenWithCaching(addr string) (*Connection, error)
+  func OpenWithLogger(addr string, logger log.Logger) (*Connection, error)
+  func OpenWithCachingAndLogger(addr string, logger log.Logger) (*Connection, error)
+
+Another solution would be to gather all the configuration in a struct type, but the resulting API isn't very expressive and merely displaces the problem:
+
+  type Config struct {
+    Addr    string
+    Caching bool
+    Logger  log.Logger
+  }
+
+  func Open(config Config) (*Connection, error)
+
+
+
+* Functional options to the rescue
+
+One useful pattern for making an API easier to use and evolve is _functional_options_.
+
+Declare an unexported struct for storing the values of optional parameters:
+
+  type options struct {
+    cache bool
+    logger log.Logger
+  }
+
+Declare an exported interface with an unexported `apply` method:
+
+  type Option interface {
+    apply(*options)
+  }
+
+Make `Open` take a `...Option` parameter in addition to its mandatory parameter(s):
+
+  func Open(addr string, opts ...Option) (*Connection, error)
+
+
+
+* Functional options to the rescue (cont'd)
+
+For each option, declare an unexported struct type and an exported factory function:
+
+  type cacheOption bool
+
+  func (c cacheOption) apply(opts *options) {
+    opts.cache = bool(c)
+  }
+
+  func WithCache(c bool) Option {
+    return cacheOption(c)
+  }
+
+and
+
+  type loggerOption struct { Log log.Logger }
+
+  func (l loggerOption) apply(opts *options) {
+    opts.logger = l.Log
+  }
+
+  func WithLogger(log log.Logger) Option {
+    return loggerOption{Log: log}
+  }
+
+
+
+* Functional options to the rescue (cont'd)
+
+Then, clients of your package are free to specify only the options they need:
+
+  db.Open(addr)
+  db.Open(addr, db.WithLogger(log))
+  db.Open(addr, db.WithCache(false))
+  db.Open(addr, db.WithCache(false), db.WithLogger(log))
+
+Moreover, you can always add another option later:
+
+  type timeoutOption time.Duration
+
+  func (t timeoutOption) apply(opts *options) {
+    opts.timeout = time.Duration(c)
+  }
+
+  func WithTimeout(t time.Duration) Option {
+    return timeoutOption(t)
+  }
+
+Because the signature of `Open` doesn't change, you'll only need to release a new minor (as opposed to major) version of your package.
+
+
+
+* Resources about functional options
+
+- [[https://commandcenter.blogspot.com/2014/01/self-referential-functions-and-design.html][Rob Pike - Self-referential functions and the design of options]]
+- [[https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis][Dave Cheney - Functional options for friendly APIs]]
+- [[https://github.com/uber-go/guide/blob/master/style.md#functional-options][Uber Go style guide - functional options]]
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/witch-learning.svg 200 _
+
+: This is just one way of implementing _functional_options_; other people use closures.
+
+
+
+* Documentation and testing
+
+
+
+* Document your packages
+
+Go takes a lightweight but powerful approach to documentation: the documentation of a package is simply written as comments in the package's source file(s).
+
+Document your packages and everything it exports. [[https://go.dev/blog/godoc][Follow the conventions]].
+
+You can also write [[https://go.dev/blog/examples][executable examples]], which become part of your package's documentation and test suite.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/witch-learning.svg 200 _
+
+: package's doc: doc.go
+: each documentation comment is a complete sentence starting with the name of the element it describes.
+: documenting a package doesn't require a lot of effort
+
+
+
+* Exercise: document the twitter package
+
+1. Open `go-course-advanced/src/namecheck` in VS Code.
+
+2. Write a short doc comment for the package at the top of `twitter/twitter.go`.
+
+3. Document each of the identifiers exported by the `twitter` package.
+
+4. Write an example test for `Twitter`'s `IsValid` method in `twitter/example_test.go`.
+
+5. Generate the documentation [[https://pkg.go.dev/golang.org/x/tools/cmd/godoc][using `godoc`]].
+
+6. Browse the generated doc and execute the example test in your browser.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Table-driven subtests
+
+If multiple test functions unduly duplicate the testing logic for different test cases,
+you can gather those test cases under a single test function and run them as _subtests_:
+
+  func TestIsValid(t *testing.T) {
+    cases := []struct{label string; username string; want bool}{
+      {label: "too long", username: "obviously_longer_than_15_chars", want: false},
+      {label: "too short", username: "foo", want: false},
+      {label: "valid", username: "jub0bs", want: true},
+    }
+    for _, c := range cases {
+      f := func(t *testing.T) {
+        var tw twitter.Twitter
+        got := tw.IsValid(c.username)
+        if got != c.want {
+          t.Errorf("twitter.IsValid(%s): got %t; want %t", c.username, got, c.want)
+        }
+      }
+      t.Run(c.label, f)
+    }
+  }
+
+: the element type of slice cases is a an anonymous struct type
+
+
+
+* Exercise: switch to table-driven subtests for twitter's IsValid method
+
+1. Open `go-course-advanced/src/namecheck` in VS Code.
+
+2. Coalesce the multiple test functions for `IsValid` into a single test function that uses table-driven subtests.
+
+3. Run those tests.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Test doubles: single-method-interface adapter
+
+To stub or fake a single-method interface like the following,
+
+  type Client interface {
+    Do(req *http.Request) (*http.Response, error)
+  }
+
+declare a type based on a function whose signature matches the interface's method,
+
+  type clientFunc func(*http.Request) (*http.Response, error)
+
+and make that type satisfy the interface simply by delegating to the function:
+
+  func (f clientFunc) Do(req *http.Request) (*http.Response, error) {
+    return f(req)
+  }
+
+
+
+* Test doubles: single-method-interface adapter
+
+For convenience, you can also declare factory functions for your test-double type:
+
+  func ClientWithStatusCodeAndBody(sc int, body string) namecheck.Client {
+    do := func(_ *http.Request) (*http.Response, error) {
+      res := http.Response{
+        StatusCode: sc,
+        Body:       io.NopCloser(strings.NewReader(body)),
+      }
+      return &res, nil
+    }
+    return clientFunc(do)
+  }
+
+  func ClientWithError(err error) namecheck.Client {
+    do := func(_ *http.Request) (*http.Response, error) {
+      return nil, err
+    }
+    return clientFunc(do)
+  }
+
+
+
+* Exercise: write unit tests for IsAvailable
+
+1. Open `go-course-advanced/src/namecheck` in VS Code.
+
+2. Study the `stub` package carefully.
+
+3. In `github_test.go`, write a test to check that, if the client responds with a 200, the `IsAvailable` method returns
+
+  false, nil
+
+4. Run that test.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Test doubles: generalization to multiple-method interfaces
+
+This pattern can be generalized to multiple-method interfaces by using, instead of a function type, a struct type with function-typed fields:
+
+  type Client interface {
+    Do(*http.Request) (*http.Response, error)
+    Get(string) (*http.Response, error)
+  }
+
+  type stubClient struct {
+    do func(*http.Request) (*http.Response, error)
+    get func(string) (*http.Response, error)
+  }
+
+See [[https://www.youtube.com/watch?v=yeetIgNeIkc][Mat Ryer - Idiomatic Go Tricks (Golang UK 2016)]] (esp. at [[https://www.youtube.com/watch?v=yeetIgNeIkc&t=8m20s][8'20'']] and [[https://www.youtube.com/watch?v=yeetIgNeIkc&t=16m40s][16'40'']])
+
+
+
+* Advanced error handling
+
+
+* Bad error-handling practices
+
+- ignoring errors indiscriminately
+- handling (e.g. logging) then returning an error
+- simply concatenating error messages
+- parsing error messages to access contextual information programmatically
+- calling `os.Exit` or `log.Fatal` deep within your program
+- panicking willy-nilly
+- [[https://go.dev/play/p/WmGrIUbUdmb][recovering from panics]] indiscriminately
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/science/gas-mask.svg 200 _
+
+: source of bugs, mention errcheck
+: e.g. if you log an error, don't bubble it up
+: concat (advocated in gopl): forces your clients to parse your error messages.
+: os.Exit doesn't honor deferred calls
+: panicking willy-nilly: errors are values
+: recover: you cannot be sure whether the programme is in a valid state
+
+
+
+* Report errors appropriate to the level of abstraction
+
+Don't systematically bubble up low-level errors to the caller:
+
+  if err != nil {
+    return err
+  }
+
+Instead, return a higher-level error that "wraps" the lower-level one.
+
+The easy way is to use the `%w` format directive:
+
+  if err != nil {
+      return fmt.Errorf("failure to check username availability: %w", err)
+  }
+
+To provide more information, declare your own type that satisfies `error` and `wrapper`:
+
+  type error interface {
+    Error() string
+  }
+  type wrapper interface {
+    Unwrap() error
+  }
+
+: since Go 1.13
+: if we simply bubble up the low-lever error, we lose the context in which this error occurred
+
+
+
+* Exercise: define a high-level error for IsAvailable
+
+1. Open `go-course-advanced/src/namecheck` in VS Code.
+
+2. Export a struct type from package `namecheck` that represents a failure to check the availability of a username; it should provide some context about the failure (username, platform, underlying cause).
+
+3. Make it satisfy the `error` interface.
+
+4. Rather than bubbling up the low-level error produces by the `http` package in the `IsAvailable` function, return a pointer to a value of your custom error type.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Inspecting error values: comparison with sentinel errors
+
+Don't stop at `err`!=`nil`. [[https://www.youtube.com/watch?v=PAAkCSZUG1c&t=17m27s][Don't just check errors; handle them gracefully]].
+
+You can compare an error to a specific sentinel error value:
+
+  if err != io.EOF {
+    // handle error
+  }
+
+Since [[https://go.dev/blog/go1.13-errors][Go 1.13]], you can ask wether the error chain contains the error value of interest:
+
+  if errors.Is(err, io.EOF) {
+    // handle error
+  }
+
+If you're only interested in the next value up the error chain, do this:
+
+  type wrapper interface { Unwrap() error }
+  if err, ok := err.(wrapper); ok { // err has a cause
+    // call err.Unwrap to access the error that caused err
+  }
+
+
+
+* Exercise: inspect the cause of an error
+
+1. Open `go-course-advanced/src/namecheck` in VS Code.
+
+2. Make `UnknownAvailabilityError` satisfy the `wrapper` interface.
+
+3. In `main`, access the cause of the error received on the channel and print it.
+
+4. To trigger an artificial error, scramble the host in the implementation of `GitHub`'s `IsAvailable` method.
+
+5. Compile and run the program.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Inspecting error values: asserting on behavior
+
+A type assertion can tell you whether an error satisfies a more specific interface:
+
+  type temporary interface {
+    Temporary() bool
+  }
+  if errTemp, ok := err.(temporary); ok {
+    // call errTemp.Temporary
+    // if it returns true, perhaps retry the operation that failed
+  }
+
+Since Go 1.13, you can check whether the error chain contains a value of that interface:
+
+  type temporary interface {
+    Temporary() bool
+  }
+  var errTemp temporary
+  if errors.As(err, &errTemp) {
+    // call errTemp.Temporary
+    // if it returns true, perhaps retry the operation that failed
+  }
+
+
+
+* Organizing packages
+
+
+
+* Use internal packages
+
+An internal package is any package whose path contains a segment named "internal".
+
+It can only be imported by the parent and sibling packages. For example, a package `foo/bar/internal/baz` can only be imported by package `foo/bar` and its subpackages.
+
+
+Internal packages are [[https://dave.cheney.net/2019/10/06/use-internal-packages-to-reduce-your-public-api-surface][a great language mechanics for restricting the surface area of your project's API]]. They tend to be underused. Use them liberally!
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/knight.svg 200 _
+
+: great for preventing clients from depending directly on implementation details.
+: example: net/http/internal
+
+
+
+* Exercise: put common implementation details in an internal package
+
+1. Open `go-course-advanced/src/namecheck` in VS Code.
+
+2. Notice some code duplication between the `twitter` and `github` package.
+
+3. Create a more flexible `IsLongEnough` function in a new `namecheck/internal` package.
+
+4. Make the `twitter` and `github` package use the `internal.IsLongEnough` function instead of their own `isLongEnough` function (which can now be removed).
+
+5. Which packages can import `namecheck/internal`? What about 3rd-party packages?
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+: step 3: add minLen as an extra param
+
+
+
+* Reminder: no dependency cycles allowed
+
+For example, package `foo` cannot import package `bar` if `bar` itself imports `foo`.
+
+.image img/dependency_cycle.svg 150 _
+
+Imports form a _directed_acyclic_graph_, like the graph of commits in a Git repository.
+
+This design decision by the Go team is a key enabler of fast compilation.
+
+.image https://miro.medium.com/max/4800/1*-bo7H329eM0O1eL_ASBVOA.jpeg 200 _
+
+: any cycle issues in your projects?
+
+
+
+* Avoiding dependency cycles
+
+A rule of thumb is that a superpackage doesn't depend on any of its subpackages.
+
+For example, here is a partial view of the `encoding` package and its subpackages:
+
+.image img/dep_arrows_dont_point_down.svg _ 1000
+
+More general stuff at the top; more specific stuff in subpackages.
+
+
+
+* Flat is better
+
+To a deep and narrow package hierarchy, prefer a shallow and possibly wide one:
+
+.image img/pkg_shallow_and_wide.svg 400 _
+
+
+
+* Structuring your project
+
+If you don't know where to start, adopt a flat structure: everything in a single package.
+
+As structure emerges, create packages organized by context rather than by function.
+
+The structure of your project should tell a story. Avoid MVC layouts!
+
+Resources:
+
+- [[https://medium.com/@benbjohnson/standard-package-layout-7cdbc8391fc1][Ben Jonhson - Standard Package Layout]]
+- [[https://www.youtube.com/watch?v=oL6JBUk6tj0][Kat Zien - How Do You Structure Your Go Apps (GopherCon 2018)]]
+- [[https://rakyll.org/style-packages/][Jaana B. Dogan - Style guideline for Go packages]]
+
+.image https://www.pngkit.com/png/full/412-4127445_gopher-working-hard-to-move-packages-boxes-golang.png 150 _
+
+: context (twitter, github) ; responsibility (storage)
+
+
+
+* Domain-driven design in Go
+
+_Domain-driven_design_(DDD)_is_the_concept_that_the_structure_and_language_of_software_code_should_match_the_business_domain._ ([[https://en.wikipedia.org/wiki/Domain-driven_design][Wikipedia]])
+
+- In a Go monolith, structure your packages around your [[https://martinfowler.com/bliki/BoundedContext.html][_bounded_contexts_]].
+
+- Implicit satisfation makes Go interfaces perfect for [[https://en.wikipedia.org/wiki/Hexagonal_architecture_(software)][_ports_and_adapters_]]!
+
+- Declare named types that reflect your context's [[https://martinfowler.com/bliki/UbiquitousLanguage.html][_ubiquitous_language_]].
+
+- Well-encapsulated types with a useful zero value make for great _domain_objects_.
+
+- Use value (not pointer) method receivers for [[https://martinfowler.com/bliki/ValueObject.html][_value_objects_]].
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/sage.svg 200 _
+
+: [[https://www.youtube.com/watch?v=B-reKkB8L5Q][Some people]] have even implemented [[https://www.youtube.com/watch?v=JHGkaShoyNs][event-sourced systems]] in Go!
+: discuss
+
+
+
+* Generics
+
+
+
+* A non-generic binary tree
+
+A binary tree whose nodes each hold an `int` value can be designed as follows:
+
+  type IntTree struct {
+    Elem  int
+    Left  *IntTree
+    Right *IntTree
+  }
+
+The `Size` method returns the number of nodes in the tree:
+
+  func (t *IntTree) Size() int {
+    if t == nil {
+      return 0
+    }
+    return 1 + t.Left.Size() + t.Right.Size()
+  }
+
+See this [[https://go.dev/play/p/-x42l8-rqvK][playground]].
+
+What if you wanted nodes to hold values of type `string` instead?
+
+
+
+* Before generics: the code duplication / generation approach
+
+You could manually duplicate the type declaration in your code:
+
+  type StringTree struct {
+    Elem  string
+    Left  *StringTree
+    Right *StringTree
+  }
+
+Note that the implementation of the `Size` method would be identical!
+
+  func (t *StringTree) Size() int {
+    if t == nil {
+      return 0
+    }
+    return 1 + Size(t.Left) + Size(t.Right)
+  }
+
+Alternatively, you could generate different specializations of your binary tree (one for `int`, one for `string`, etc.) but that requires a pre-compilation step in your build...
+
+
+
+* Before generics: less type-safe, more cumbersome alternative
+
+You could design your tree to hold values of type `interface{}` instead:
+
+  type Tree struct {
+    Elem  interface{}
+    Left  *Tree
+    Right *Tree
+  }
+
+But the type is now _too_ flexible: different nodes of the same tree can hold values of different concrete types! See [[https://go.dev/play/p/unR9THFy5b-][this playground]].
+
+Also, retrieving a node value's concrete type requires the use of type assertions or reflection. Not great...
+
+
+
+* What are generics?
+
+Generics, also known as "type parameters", allow [[https://en.wikipedia.org/wiki/Parametric_polymorphism][_parametric_polymorphism_]].
+
+Go 1.18 adds support for generics in the language.
+
+Types and functions can now take _type_parameters_:
+
+  type Tree[E any] struct {
+    Elem  E
+    Left  *Tree[E]
+    Right *Tree[E]
+  }
+
+See [[https://go.dev/play/p/H3MTBgdkc4x][this playground]].
+
+
+
+* Why generics matter
+
+The advent of generics is promising:
+
+- more flexible and reusable functions and [[https://jub0bs.com/posts/2020-07-21-go-bimap][data structures]]
+- more efficient code at run time
+- more type safety
+- fewer reasons to resort to reflection or code generation
+
+See [[https://go.dev/blog/why-generics][_Why_Generics?_]] on the Go blog; the syntax it uses is outdated, though.
+
+Some people worry that generics are going to compromise Go's agenda of simplicity.
+Time will tell...
+
+: slightly longer compilation
+: less empty interface
+: e.g. generic function for reversing a slice
+: What do you think?
+: see use cases in your code? do you use go generate?
+
+
+
+* Generic types and functions
+
+A generic type takes a list of type arguments (in brackets) after its name:
+
+  type Tree[E any] struct {
+    Elem  E
+    Left  *Tree[E]
+    Right *Tree[E]
+  }
+
+A generic function takes a list of type arguments (in brackets) between its name and its list of normal parameters:
+
+  func Reverse[E any](s []E)
+
+At call sites, you must usually specify type arguments for the required type parameters (_instantiation_). In some cases, type inference by the compiler allows you to omit type arguments.
+
+: you can have generic interface types too
+
+
+
+* Exercise: write a generic Reverse function for slices
+
+1. Implement a generic function that reverses a slice in place:
+
+  func Reverse[E any](s []E)
+
+2. Use your function with slices of different types.
+
+3. What would you have had to do before Go 1.18?
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Obtaining the zero value of a type parameter
+
+Consider this generic function for accessing the last element (if any) of a slice.
+
+  func Last[E any](s []E) (E, bool)
+
+In the case of a nil or empty slice, you should return the zero value of the element type.
+
+How? Remember that declaring a variable of a given type without initializing the variable yields the zero value of that type:
+
+.play -edit src/type_parameter_zero.go /^//START/,/^//END/
+
+See [[https://go.googlesource.com/proposal/+/refs/heads/master/design/43651-type-parameters.md#the-zero-value][Type Parameters Proposal - The zero value]].
+
+
+
+* Type constraints as regular interfaces
+
+The possible type arguments for a type parameter are restricted by a _type_constraint_, which is like a "metatype".
+
+Type constraints are expressed as interface types:
+
+  func WriteToAll[W io.Writer](ws []W, src []byte) (int, error)
+
+The language now provides a predeclared identifier named `any`, which simply is an _alias_ (with a shorter name) for the _empty_interface_:
+
+  type Tree[E any] struct {
+    Elem  E
+    Left  *Tree[E]
+    Right *Tree[E]
+  }
+
+Because the type constraint is `any`, our generic `Tree` type can be instantiated with an arbitrary type argument: `int`, `string`, `bool`, some struct type, etc.
+
+
+
+* Type constraints as type sets
+
+For operations provided by operators rather than by methods, you can use _type_sets_:
+
+  type Plusser interface {
+    int | uint | string
+  }
+
+The tilde prefix operator enables more flexibility:
+
+  type Plusser interface {
+    ~int | ~uint | ~string
+  }
+
+For instance, `~int` denotes any type whose [[https://go.dev/ref/spec#Underlying_types][_underlying_type_]] is `int`.
+
+The [[https://pkg.go.dev/golang.org/x/exp/constraints][golang.org/x/exp/constraints package]] provides useful type sets, such as `Ordered`, which allows any type that supports the ordering operators (`<`, `<=`, `>`, and `>=`).
+
+
+
+* Type constraints as type sets (cont'd)
+
+Note: type sets can be used only as type constraints, not as regular types:
+
+  type Plusser interface {
+    int | uint | string
+  }
+
+  var p Plusser // compilation error
+
+This limitation may be lifted in a future release of Go.
+
+
+
+* Limitations on generic methods
+
+A method cannot tighten the constraints on its receiver's type parameters.
+
+For instance, given the following type declarations,
+
+  type Tree[E any] struct {
+    Elem  E
+    Left  *Tree[E]
+    Right *Tree[E]
+  }
+
+  type Plusser interface {
+    int | uint | string
+  }
+
+the following isn't allowed:
+
+  func (t *Tree[E Plusser]) Sum() E // compilation error
+
+However, you can declare `Sum` as a _function_ rather than as a _method_:
+
+  func Sum[P Plusser](t *Tree[P]) P
+
+
+
+* Exercise: implement a Sum operation on the Tree type
+
+1. Open [[https://go.dev/play/p/H3MTBgdkc4x][this playground]].
+
+2. Add support for an operation named `Sum` on the `Tree` type. `Sum` should return the sum of the values of all the nodes in the tree.
+
+3. Can you declare `Sum` as a method on `*Tree`?
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Limitations on generic methods (cont'd)
+
+Also, methods cannot introduce additional type parameters.
+
+For instance, given the following type declaration,
+
+  type Slice[T any] []T
+
+the following function isn't valid syntax:
+
+  func (Slice[T]) Map[U any](func(T) U) []U
+
+Again, you'd have to declare `Map` as a function rather than as a method:
+
+  func Map[T, U any](s []T, f func(T) U) []U
+
+
+
+* The comparable constraint
+
+The language now provides a type constraint named `comparable`, which is satisfied by all concrete types that support equality operators `==` and `!=`.
+
+.play -edit src/comparable.go /^//START/,/^//END/
+
+However, `comparable` can only be used as a type constraint, not as a type!
+
+
+
+* Two useful packages for reducing boilerplate
+
+The [[https://pkg.go.dev/golang.org/x/exp/slices][golang.org/x/exp/slices package]] provides various functions useful with slices of any type, such as one for sorting a slice:
+
+  func Sort[E constraints.Ordered](x []E)
+
+The [[https://pkg.go.dev/golang.org/x/exp/maps][golang.org/x/exp/maps package]] provides various functions useful with maps of any type, such as one that returns a slice containing the keys of a given map:
+
+  func Keys[M ~map[K]V, K comparable, V any](m M) []K
+
+Along with the golang.org/x/exp/constraints package, those two packages will likely be rolled into the core library in v1.19.
+
+
+
+* A comparable puzzler
+
+All interface types are comparable. For instance, it's legal to do this:
+
+.play -edit src/interfaces_are_comparable.go /^//START/,/^//END/
+
+However, many interface types, including common ones like `any` and `io.Writer`,
+do _not_ satisfy the new `comparable` interface! 😕
+
+See [[https://github.com/golang/go/issues/51338][proposal: spec: permit values to have type "comparable"]].
+
+This state of affairs gives rise to surprising and disheartening limitations...
+
+
+
+* When comparable doesn't mean comparable: an example
+
+[[https://pkg.go.dev/golang.org/x/exp/maps#Values][Function `maps.Values`]] expects a map whose key type satisfies `comparable`:
+
+  func Values[M ~map[K]V, K comparable, V any](m M) []V
+
+However, because `io.Writer` interface does not implement `comparable`, passing a map whose key type is `io.Writer` to `maps.Values` is illegal:
+
+  m := map[io.Writer]int{
+    os.Stdout: 1,
+    os.Stderr: 2,
+  }
+  fmt.Println(maps.Values(m)) // compilation error
+
+See [[https://go.dev/play/p/d2PwT6lXLwS][this playground]].
+
+
+
+* Recursive type constraint
+
+How would you express the constraint "any type `T` that has a `Less(T)` bool method"?
+
+You can achieve that in Go 1.18+ using a trick similar to Java's _recursive_type_bound_:
+
+  type Lesser[T any] interface {
+    Less(T) bool
+  }
+
+  func IsLess[T Lesser[T]](lhs, rhs T) bool {
+    return lhs.Less(rhs)
+  }
+
+The following concrete type satisfies the `Lesser[Apple]` interface:
+
+  type Apple int
+
+  func (lhs Apple) Less(rhs Apple) bool {
+    return lhs < rhs
+  }
+
+See [[https://go.dev/play/p/9AocjmraWHC][this playground]] and [[https://stackoverflow.com/a/68868092/2541573][this Stack Overflow answer]].
+
+
+
+* A word to the wise
+
+Just because Go has generics doesn't mean that every type and function should be generic.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/sage.svg 200 _
+
+: https://stackoverflow.com/questions/71628061/go-generics-where-would-i-use-any-instead-of-interface#comment126591841_71628061
+: Same problem with concurrency: don't use goroutines when you don't need them.
+
+
+
+* Resources about generics
+
+- [[https://go.dev/doc/tutorial/generics][Tutorial: Getting started with generics]]
+- [[https://go.dev/ref/spec#Type_parameter_declarations][Type parameter declarations (language spec)]]
+- [[https://jub0bs.com/posts/2020-07-21-go-bimap/][A glimpse at parametric polymorphism in Go: designing a generic bidirectional map]]
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/witch-learning.svg 200 _
+
+
+
+* Context
+
+
+* Goroutines die hard
+
+You can start goroutines very easily: all it takes is the `go` keyword.
+
+However, if you're careless, the goroutines you spawn may never terminate.
+
+.play -edit src/uncancellable/main.go /^//START/,/^//END/
+
+: everyone ok with go keyword and wait groups?
+
+
+
+* The golden rule
+
+Before spawning a new goroutine, you must understand exactly under what conditions it will terminate.
+
+If you're careless and spawn goroutines willy-nilly, you expose yourself to correctness and performance bugs (_goroutine_leaks_).
+
+.image https://www.globalnerdy.com/wp-content/uploads/2017/08/gopher-this-is-fine.jpg 300 _
+
+
+
+* Context is for cancellation
+
+The `context` package provides a `Context` type.
+
+  type Context interface {
+    Done() <-chan struct{}
+    Err() error
+    Deadline() (deadline time.Time, ok bool)
+    Value(key interface{}) interface{}
+  }
+
+Its primary purpose is to *broadcast*a*cancellation*signal* to child goroutines.
+The cancellation signal may be sent explicitly or time-based.
+
+We'll talk about `Context`'s secondary (more controversial) purpose later.
+
+
+
+* Reactive cancellation detection via the Done method
+
+.play -edit src/cancellablechan/main.go /^//START/,/^//END/
+
+
+
+* Reactive cancellation detection via the Err method
+
+The `Err()` method returns `nil` before the context gets canceled or times out,
+and either `context.Canceled` or `context.DeadlineExceeded` afterwards.
+
+.play -edit src/cancellableerr/main.go /^//START/,/^//END/
+
+This approach for detecting a cancellation signal is useful when your code involves no channel communication.
+
+
+
+* Anticipation of cancellation via the Deadline method
+
+.play -edit src/cancellabledeadline/main.go /^//START/,/^//END/
+
+: if you're about to launch a task that you know will finish after the deadline, you could return immediately instead
+
+
+
+* Deriving contexts
+
+You can derive a new context from an existing one via one of three factory functions:
+
+  func WithCancel(parent Context) (ctx Context, cancel CancelFunc)
+  func WithDeadline(parent Context, d time.Time) (Context, CancelFunc)
+  func WithTimeout(parent Context, timeout time.Duration) (Context, CancelFunc)
+
+The `CancelFunc`-typed result, which is simply a `func()`, *must* be called at some stage.
+The best thing to do is call it with `defer` and forget about it:
+
+  ctx, cancel = context.WithCancel(ctx)
+  defer cancel()
+
+Important: If you fail to cancel a context that you've derived, you'll leak resources.
+
+.image https://www.globalnerdy.com/wp-content/uploads/2017/08/gopher-this-is-fine.jpg 150 _
+
+
+
+* Contexts form a tree
+
+In memory, contexts form a tree whose root is a special, uncancellable context, which is returned by the `context.Background()` function.
+
+Cancellation signals flow from top to bottom: cancelling a node of the context tree also cancels all of the contexts derived from it.
+
+.image img/context_tree.svg 300 _
+
+: child / parent context
+: background isn't cancellable
+
+
+
+* Designing a cancellable function
+
+A function that must be cancellable should accept a `Context` parameter.
+
+By convention, that parameter is the function's first and is named `ctx`:
+
+  IsAvailable(ctx context.Context, username string) (bool, error)
+
+
+
+* Embrace the cancel culture!
+
+Any of your functions that is
+
+- IO-bound (e.g. it sends HTTP requests, writes to the DB, ...), or
+- CPU-bound but possibly long-running (e.g. it performs some number crunching),
+
+should be cancellable.
+
+
+
+* Exercise: make IsAvailable cancellable
+
+1. Open `go-course-advanced/src/namecheck` in VS Code.
+
+2. Modify the signature of `namecheck.Availabler`'s method so that it also accept a `Context` parameter.
+
+3. Consult the `net/http` doc to figure out how to attach a context to a HTTP request.
+
+4. In `twitter`'s `IsAvailable` method, propagate the context to the HTTP request.
+
+5. Do the same for `github`'s `IsAvailable` method.
+
+6. Fix the CLI and server executables.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+: IsAvailable is IO-bound!
+: print the error to check whether it was cancelled
+
+
+
+* Context.TODO()
+
+Never use `nil` where a `Context` is required!
+
+If you're unsure which context to use somewhere, avoid using `context.Background()`.
+
+Instead, temporarily use the dummy (uncancellable) context return by the `context.TODO()` function.
+
+Revisit the code later, once you've figured out where to obtain a proper context from.
+
+.image https://go.dev/blog/gopher/plush.jpg 250 _
+
+
+
+* Context should be passed to functions, not stored in structs
+
+Pass contexts to functions; don't store contexts in struct fields.
+
+In rare cases, in order not to break an existing API, you may have to store a context in a struct, but that's the exception that confirms the rule.
+
+See [[https://go.dev/blog/context-and-structs][Contexts and structs]] on the Golang blog.
+
+: unless you have to
+
+
+
+* Exercise: cancel IsAvailable if the request gets canceled
+
+1. Open `go-course-advanced/src/namecheck` in VS Code.
+
+2. Consult the `net/http` doc to figure out how to extract a context from a HTTP request inside a handler.
+
+3. In `cmd/server/main.go`, pass that context to `IsAvailable`.
+
+4. Start the server.
+
+5. Exercise the `check` endpoint in your browser and quickly close your browser tab.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Storing data in contexts
+
+The `context` package also provides a way of storing key-value pairs in contexts for subsequent retrieval and use across API boundaries.
+
+`context.WithValue` allows you to derive a new context that contains a key-value pair:
+
+  func WithValue(parent context.Context, key, val interface{}) context.Context
+
+The value can later to retrieved via the `Value` method on the context in question or any context derived from it:
+
+  type Context interface {
+    // other methods omitted
+    Value(k interface{}) interface{}
+  }
+
+
+
+* Context: cancellation signal or value bag?
+
+The ability to store values in contexts is completely orthogonal to cancellation!
+
+Because of its hybrid purpose, the `context.Context` type is quite controversial:
+
+- [[https://dave.cheney.net/2017/01/26/context-is-for-cancelation][Dave Cheney - Context is for cancellation]]
+- [[https://dave.cheney.net/2017/08/20/context-isnt-for-cancellation][Dave Cheney - Context isn't for cancellation]]
+- [[https://faiface.github.io/post/context-should-go-away-go2/][Michal Štrba - Context should go away for Go 2]]
+
+.image http://laboiteaimages.alainkorkos.fr/public/2019/le_cul_entre_deux_chaises/.c_u.jpg 300 _
+
+: cul entre deux chaises
+
+
+* Storing values in context: caveats
+
+Relying on context values suffers from several limitations:
+
+- `WithValue` and `Value` are not typesafe and their use requires some care.
+- There is no compile-time guarantee that a specific value pair will be present.
+- There is no way of enumerating the key-value pairs.
+- Functions that overrely on context values have a less expressive API.
+- Lookup performance can be poor (linked-list implementation).
+
+: poof performance: linked-list implementation
+
+
+
+* Context values should only be request-scoped and informative
+
+Context values let you smuggle anything in a function without changing its signature.
+
+Don't take this as a license to avoid proper dependency inversion!
+
+Context values should inform, not control the logic:
+
+- Good candidates: metrics, trace ID, auth token
+
+- Bad candidates: logger, database connection, server options
+
+.image https://api.gretchenrubin.com/wp-content/uploads/sites/2/2015/03/Gollum-Ring.jpg 250 _
+
+
+
+* Quiz: why is this careless?
+
+You obtain a context from somewhere and pass it to your function:
+
+  func foo(ctx context.Context) error {
+    ctx = context.WithValue(ctx, "token", "xxxx-xxxx")
+    // ...
+  }
+
+Do you see the problem?
+
+.image https://cdn.shopify.com/s/files/1/0066/2116/7677/products/sherlock_1080x.png 300 _
+
+: how do you know you're not clobbering an existing key-value pair
+
+
+* Preventing key collisions across packages
+
+To guarantee that no other package uses the same context key as yours,
+
+- define an unexported key type,
+- export a typesafe factory function and a typesafe accessor function.
+
+.code src/contextvalue/auth/auth.go
+
+: imagine what would happen if other people used just a string key type
+
+
+
+* Preventing key collisions across packages (cont'd)
+
+.code src/contextvalue/main.go /^//START/,/^//END/
+
+
+
+
+* General advice on concurrency
+
+
+* Don't go overboard with goroutines
+
+Use goroutines with parcimony. Not all workloads have a structure that lends itself to concurrent composition.
+
+Familiarize yourself with [[https://en.wikipedia.org/wiki/Amdahl%27s_law][Amdahl's law]]; you cannot beat it!
+
+Keep readability in mind: a concurrent programme must be understandable. Use proven and tested concurrency patterns.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/sage.svg 200 _
+
+
+
+* Channel capacity often affects correctness
+
+Why does this program deadlock?
+
+.play -edit src/deadlockchan/main.go /^//START/,/^//END/
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/dandy/umbrella.svg 200 _
+
+: buffered channel of 1 vs. unbuffered channel
+
+
+
+* Exercise: debug this ping-pong game
+
+1. Open [[https://go.dev/play/p/n7XQ_TdOY4t][this Playground]]. It models a ping-pong game adapted from ([[https://go.dev/talks/2013/advconc.slide#6][a talk by Sameer Ajmani]]).
+
+2. The game ends with a deadlock. Can you see why?
+
+3. Discuss and fix the programme.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+: two goroutines exchanging one value over and over
+: pointer element to reduce memory footprint
+: show that deadlock if you never throw the ball on the table
+: one player terminates while the other is left holding the ball
+: one possibility: buffer size of 1, but no guarantee that the same player will play twice in a row
+: non-blocking send by adding a select statement
+: solution: https://go.dev/play/p/mollK937Rzo
+
+
+
+* Avoid time.Tick
+
+`time.Tick` is a [[https://pkg.go.dev/time/#Tick][convenient function]] for perfoming some work at regular intervals:
+
+.play -edit src/tick/main.go /^//START/,/^//END/
+
+Unfortunately, `time.Tick` always leaks a goroutine. Use a `time.Ticker` instead:
+
+.play -edit src/ticker/main.go /^//START/,/^//END/
+
+: ...and don't forget to stop it, at some stage:
+
+
+
+* Avoid time.After
+
+Similarly, under the hood, `time.After` launches a goroutine that only terminates after the specified duration.
+
+Instead, favor the use of a `time.Timer` to terminate the goroutine as soon as possible.
+
+: goroutine alive for longer than needed
+
+
+
+
+* Leave concurrency to the caller
+
+Few libraries should expose a concurrent API. Favor synchronous APIs,
+which your clients can always call in a concurrent fashion.
+
+Don't systematically design your data structures as concurrency-safe.
+Leave the option to do that to your clients.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/sage.svg 200 _
+
+
+
+* Don't assume concurrency safety
+
+None of the Go's primitives types are _concurrency-safe_.
+
+In general, you need to serialize access to variables in order to avoid data races.
+
+Types that are concurrency-safe are advertised as such in their documentation.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/sage.svg 200 _
+
+: sync.Map, my generic Bimap
+
+
+
+* Concurrency patterns
+
+
+
+* Scatter / gather
+
+This common concurrency pattern has many names, including _fan_out/fan_int_.
+
+*Scatter*
+
+Given a number of tasks (whose number is not necessarily known in advance), start one goroutine per task, and handle each task in its dedicated goroutine.
+
+*Gather*
+
+Send the result of each job to a channel; a single goroutine receives results from that channel and aggregates them.
+
+: rather than sum of all tasks, slowest task
+
+
+
+* Namecheck project: study the scatter/gather pattern
+
+Scatter/gather is implemented in the CLI and in an earlier version of the server.
+
+1. Study the server code.
+
+2. In the event of a spike in traffic, what could be a problem?
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+: for now, show them https://github.com/jub0bs/namecheck/blob/843bc01d170e13029168f4bf4c55286e9b1f0175/cmd/cli/main.go
+
+
+
+* Limitations of the fan-out pattern
+
+Unfortunately, fan out suffers from one big problem: unbounded concurrency.
+
+If there are many jobs and handling each job takes a long time, we might start too many goroutines at once, which may end up consuming a prohibitive amount of resources!
+
+We need a way to limit the level of concurrency...
+
+.image https://www.globalnerdy.com/wp-content/uploads/2017/08/gopher-this-is-fine.jpg 250 _
+
+: or compete for CPU (you can only have NUMMAXPROCS goroutines in parallel)
+: potentially expensive context switches if CPU-bound workload
+
+
+
+* Pool of workers
+
+One concurrency pattern that allows you to limit the level of concurrency is called _worker_pool_ or _pool_of_workers_.
+
+Contrary to scatter/gather, which uses a dedicated goroutine per task, this pattern uses a _fixed_ number of _worker_goroutines_.
+
+.image https://miro.medium.com/max/1600/1*ugshDOhXfC287WWhG4IfSA.jpeg 300 _
+
+
+
+* Pool of workers (cont'd)
+
+
+  nbWorkers := 16
+  var wg sync.WaitGroup
+  wg.Add(nbWorkers)
+  for i := 0; i < nbWorkers; i++ {
+    go worker(ch, &wg)
+  }
+
+Send work to the worker goroutine via a channel, and then close that channel:
+
+  for _, task := range tasks {
+    ch <- task
+  }
+  close(ch)
+  wg.Wait()
+
+Each worker goroutine continually receives work to do until the channel gets closed:
+
+  func worker(ch <-chan Task, wg *sync.WaitGroup) {
+    defer wg.Done()
+    for task := range tasks {
+      // carry out the task
+    }
+  }
+
+
+
+* Limitations of the worker-pool pattern
+
+*Spinning*its*wheels*
+
+The worker goroutines are idle when there are no jobs...
+
+What if they take up a lot of memory that could be put to use elsewhere in the programme?
+
+*An*inflexible*pattern*
+
+Besides, this pattern is only useful for limiting the level of concurrency...
+
+But what if, instead, you wanted to limit access to some resource (e.g. file descriptors, database connection)?
+
+Any ideas?
+
+
+
+* Counting semaphore
+
+Metaphor: "Due to COVID, no more than n people allowed in the bakery at a time."
+
+Declare a buffered channel of empty structs whose capacity dictates the limit of concurrent access to the resource of interest:
+
+  const maxOutstanding = 16
+  sem := make(chan struct{}, maxOutstanding)
+
+Acquire and release a "token" before and after each access to the resource:
+
+  sem <- struct{}{} // acquire a token
+  // ...            // access the resource release the token
+  <-sem             // release the token
+
+Each send operation will block for as long as the channel's buffer is full!
+
+
+
+* Namecheck project: use a semaphore
+
+1. Open `go-course-advanced/src/namecheck` in VS Code.
+
+2. Use a semaphore to guarantee that the number of concurrent calls to the `check` function doesn't exceed some fixed number (e.g. 16).
+
+3. Start the server and exercise it.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+: remark: state at package level, but we could do it differently
+
+
+
+* Limitations of the basic semaphore
+
+Attempts to acquire a token will block if the semaphore is already at capacity!
+
+As a result, under increased load, some requests will get blocked for some time.
+
+Releasing the pressure by shedding the excess load may be a more judicious approach.
+
+.image https://www.preparelovepraise.org/uploads/7/8/1/0/78107546/9894983_orig.jpg 300 _
+
+
+
+* Exercise: implement load shedding
+
+1. Open `go-course-advanced/src/loadshedding` in VS Code. The program is a simple server that uses a semaphore to limit the number of concurrent requests.
+
+2. Modify the handler to return an immediate `503`Service`Unavailable` response if the semaphore is at capacity.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Reducing tail latency with redundant requests
+
+If some data of interest is replicated across multiple databases,
+you can reduce tail latency by sending [[https://www.youtube.com/watch?v=f6kdp27TYZs&t=31m15s][redundant requests]]:
+
+- Issue the same request to each databases concurrently.
+- Accept whichever response comes back first and cancel the requests still in flight.
+
+Watch Rob Pike explain this pattern in [[https://www.youtube.com/watch?v=oV9rvDllKEg&t=27m50s][this talk]].
+
+"Drop pattern" is another name for the general principle of carrying out redundant tasks and selecting the result of whichever finishes first.
+
+.image https://miro.medium.com/max/4800/1*-bo7H329eM0O1eL_ASBVOA.jpeg 200 _
+
+: Bill Kennedy uses the term "drop pattern" in his O'Reilly video course
+
+
+
+* Redundant requests: an example
+
+1. Open `go-course-advanced/src/redundantreq` in VS Code. The `main` function queries a single data center.
+
+2. Compile the program and time its execution.
+
+3. In `main`, create a few more data centers ("Paris", "Roubaix", etc.) where the data of interest is replicated. Apply the pattern discussed on the previous slide. In addition, give up if no response is received before a given deadline.
+
+5. Compile the program and time its execution. Any improvement?
+
+6. Discuss how you would improve the pattern.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 150 _
+
+: careful not to leak goroutines
+: one solution: https://go.dev/play/p/FoKJmaIK9Ze
+: could do something more clever: only send a secondary request if no response within 95% percentile of response time
+
+
+
+* Reducing tail latency with hedged requests
+
+Redundant requests consist in unconditionally sending requests to _all_ replicas. This pattern typically puts the system under prohibitive load. An improvement is to implement _hedged_requests_ instead:
+
+- Issue a request to the first replica.
+- If the response to the first request takes too long to come back, issue another request to the second replica; etc.
+- Accept whichever response comes back first and cancel the requests still in flight.
+
+More about this and similar techniques for taming tail latency in [[https://www.youtube.com/watch?v=1-3Ahy7Fxsc][this talk by Jeff Dean]].
+
+.image https://miro.medium.com/max/4800/1*-bo7H329eM0O1eL_ASBVOA.jpeg 200 _
+
+
+
+* Hedged requests: an example
+
+1. Re-open `go-course-advanced/src/redundantreq` in VS Code.
+
+2. This time, instead of redundant requests, implement hedged requests. In addition, give up if no response is received before a given deadline.
+
+3. Compile the program and time its execution. Any improvement?
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Quiz: is there a data race?
+
+Is there a data race in the following program? Why or why not?
+
+.play -edit src/concurrentslice/main_race.go /^//START/,/^//END/
+
+
+
+* Quiz: is there a data race? (cont'd)
+
+What about the following program? Why or why not?
+
+.play -edit src/concurrentslice/main_no_race.go /^//START/,/^//END/
+
+
+
+* Slices and concurrency safety
+
+Appending to a slice or modifying the same entry of a slice from multiple goroutines without synchronization results in data races.
+
+However, writing to a dedicated entry of a slice (or array) from a goroutine is concurrency-safe!
+
+This is useful if you already know the number of concurrent tasks to perform.
+
+
+
+* Single execution with sync.Once
+
+`sync.Once` is a concurrency-safe abstraction for executing a most one action.
+
+For a given instance `once` of `sync.Once`,
+
+- only the first call to `once.Do(f)` will invoke function `f`, even if `f` has a different value in each invocation, and
+- `once.Do(f)` returns after `f` returns.
+
+.play -edit src/once/main.go /^//START/,/^//END/
+
+
+
+* Use cases for sync.Once
+
+`sync.Once` is intended for initialization that must be run exactly once.
+
+It's particularly useful for [[https://www.youtube.com/watch?v=5DVV36uqQ4E&t=20m40s][delayed initialization in HTTP handlers]] as a means of reducing a server's startup time.
+
+.image https://miro.medium.com/max/4800/1*-bo7H329eM0O1eL_ASBVOA.jpeg 200 _
+
+Don't abuse it, though. In particular, using a `sync.Once` to ensure a channel is closed no more than once feels hacky!
+
+
+
+* Exercise: reduce a server's startup time with sync.Once
+
+1. Open `go-course-advanced/src/handleronce` in VS Code.
+
+2. Inspect the code. Note that the initialization of the Foo handler takes must longer than the Bar handler's.
+
+3. Compile the program and run the executable. What happens?
+
+4. Use a `sync.Once` to perform the initialization of the Foo handler in a lazy fashion.
+
+5. Compile the program and run the executable again. Check that the server's startup time is much reduced.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Macro-optimization
+
+
+
+* Performance analysis
+
+What if you don't know where to focus your efforts to improve performance?
+
+Two useful profiling/tracing tools at your fingertips are
+
+- `pprof`
+- Go's execution tracer
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/witch-too-much-candy.svg 200 _
+
+
+
+* pprof in a nutshell
+
+`pprof` is a [[https://github.com/google/pprof][Google tool]] for visualization and analysis of profiling data.
+
+It isn't specific to Go, but it's well-integrated in the Go ecosystem:
+
+- `go`tool`pprof` (subcommand)
+- `runtime/pprof`
+- `net/http/pprof`
+
+It is _pull-based_: during program execution, `pprof` is going to regularly measure what the program is doing and produce summary statistics.
+
+A requirement for taking full advantage of `pprof` is [[https://graphviz.org/][Graphviz]].
+
+
+
+* CPU profile with runtime/pprof
+
+To produce a CPU profile of an executable, first import `runtime/pprof`.
+
+Then, at the beginning of the `main` function,
+
+- create a file named "cpu.pprof" (by convention),
+- invoke function `pprof.StartCPUProfile` and pass it the file,
+- invoke function `pprof.StopCPUProfile` in a deferred call.
+
+Then, exercise your program in a realistic way.
+
+The results of the CPU profile will be written to `cpu.pprof`.
+
+: some people simply print the profile to stdout, but if the program itself prints to stdout, garbled mess
+
+
+
+* Inspecting pprof results at the command line
+
+To open `pprof` at the command line, run
+
+  go tool pprof cpu.pprof
+
+Particularly useful `pprof` commands include the following:
+
+- `top`: top ten functions where most of the execution time is spent
+- `list`: takes a qualified function name and reports how much time instructions within it take
+- `web`: produces a call graph of the program
+
+
+
+* Inspecting pprof results in the browser
+
+You can also run `pprof` as a server, for visualization in your browser:
+
+  go tool pprof -http=":8000" cpu.pprof
+
+[[https://brendanjryan.com/2018/02/28/profiling-go-applications.html][_Flame_graphs_]], a particularly useful visualization for drilling down on performance bottlenecks, are available in `pprof`:
+
+.image https://matoski.com/article/golang-profiling-flamegraphs/goroutines-flamegraph.png 200 _
+
+If you're not familiar with flame graphs and don't know how to interpret them, read [[https://www.webperf.tips/tip/understanding-flamegraphs/][this post]].
+
+
+
+* Exercise: profile and improve tomnomnom/anew
+
+1. Clone `https://github.com/tomnomnom/anew` and open it in VS Code.
+
+2. Read the README and `main.go`. Run the program on simple input.
+
+3. Time its execution on a large input file with the `time` utility.
+
+4. Produce a CPU profile with the `runtime/pprof` package and inspect the results. Can you identify room for improvement?
+
+5. Improve the program. Profile it again to see how your changes affected performance.
+
+6. Stop using `runtime/pprof` in the program and time its execution. Any better?
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+: use https://github.com/danielmiessler/SecLists/blob/master/Passwords/BiblePass/BiblePass_part01.txt
+: use os.Create rather than os.Open
+: why stop using pprof
+
+
+
+* net/http/pprof
+
+For server code, you can expose `pprof` profiles through endpoints on the `/debug/pprof/` path.
+
+A blank import is the simplest way to do that:
+
+  import _ net/http/pprof
+
+However, [[http://mmcloughlin.com/posts/your-pprof-is-showing][for security reasons]], don't expose this endpoint to the world on your production server!
+
+.image https://www.globalnerdy.com/wp-content/uploads/2017/08/gopher-this-is-fine.jpg 200 _
+
+: https://github.com/golang/go/blob/1106512db54fc2736c7a9a67dd553fc9e1fca742/src/net/http/pprof/pprof.go#L67-L71
+
+
+
+* Exercise: use net/http/pprof in the namecheck server
+
+1. Open `go-course-advanced/src/namecheck` in VS Code.
+
+2. Import `net/http/pprof` in `cmd/server/main.go`.
+
+3. Run the server.
+
+4. Study the [[https://pkg.go.dev/net/http/pprof/][`net/http/pprof` documentation]].
+
+5. Use `go`tool`pprof` to inspect the profiling results of your live server.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+: what about OVH?
+
+
+
+* The execution tracer in a nutshell
+
+It is _push-based_: it records every noteworthy event that occur in the runtime, such as
+
+- goroutine lifecycle events (creation, start, end)
+- goroutine block/unblock events (e.g. `mutex.Lock()`)
+- network I/O
+- system calls
+- garbage-collection runs
+
+The results are much more complete than `pprof`'s.
+
+Warning: the resulting trace file can be large!
+
+
+
+* Activating the execution tracer
+
+To trace the execution of a program, first import `runtime/trace`.
+
+Then, at the beginning of the `main` function,
+
+- create a file named "trace.out" (by convention),
+- invoke function `trace.Start` and pass it the file,
+- invoke function `trace.Stop` in a deferred call.
+
+Then, exercise your program in a realistic way.
+
+The tracing results will be written to `trace.out`.
+
+
+* Inspecting the tracing results
+
+Run
+
+  go tool trace trace.out
+
+This will open the results in your browser.
+
+.image https://blog.gopheracademy.com/postimages/advent-2017/go-execution-tracer/view-trace.png 200 _
+
+See [[https://blog.gopheracademy.com/advent-2017/go-execution-tracer/][André Carvalho - Go execution tracer]].
+
+
+
+* Exercise: use the execution tracer to optimize a fractal generator
+
+1. Open `go-course-advanced/src/mandelbrot` in VS Code.
+
+2. Time run the program; inspect the image file it creates.
+
+3. Profile it with `pprof`. Can you glean any valuable info from the report?
+
+4. Trace the program's execution. Suggest changes for improving performance.
+
+5. Validate your changes after each improvement.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+(adapted from [[https://www.youtube.com/watch?v=ySy3sR1LFCQ][Francesc Campoy Flores's justforfunc #22: using the Go execution tracer]])
+
+
+
+* Micro-optimization
+
+
+
+* Word size
+
+The size of a _word_ (4 or 8 bytes) depends on your compiler and architecture.
+
+The word size corresponds to the size of `int` and `uint` (and `uintptr`).
+
+You can compute it as a constant:
+
+  const uintSizeInBytes = 4 << ((^uint(0)) >> 32 & 1)
+
+It would be a mistake to convert an `int64` to an `int` without making sure that the word size on the target machine is 8 bytes!
+
+.image https://www.globalnerdy.com/wp-content/uploads/2017/08/gopher-this-is-fine.jpg 200 _
+
+
+
+* Alignment in memory
+
+All values must start on a word boundary in memory. No exceptions! (Why?)
+
+*Arrays*
+
+Array values must start on a multiple of the size of their element type.
+
+For instance, an array of `int64` must start on a multiple of 8 bytes in memory.
+
+*Struct*types*
+
+Struct types must start on a multiple of the size of their largest field.
+
+*Other*types*
+
+The values of all the other types must start on a multiple of their size in memory.
+
+For instance, an `int32` must start on a multiple of 4 bytes in memory.
+
+
+
+* Struct memory layout
+
+To respect the alignment rules, the compiler may have to add some _padding_.
+
+As a result, the order of a struct's fields affects the struct's size in memory!
+
+You can visualize that layout with [[https://twitter.com/dominikhonnef][Dominik Honnef]]'s [[https://github.com/dominikh/go-tools/tree/master/cmd/structlayout][`structlayout` utilities]]:
+
+  go install honnef.co/go/tools/cmd/structlayout
+  go install honnef.co/go/tools/cmd/structlayout-pretty
+  go install honnef.co/go/tools/cmd/structlayout-optimize
+
+One sure way of minimizing padding consists in ordering the fields of your struct in decreasing size order: largest field first, smallest field last.
+
+.image https://miro.medium.com/max/4800/1*OxWM0qyTBnb6WfSEw-T9sg.jpeg 200 _
+
+
+
+* Exercise: determine and optimize a struct type's memory layout
+
+1. Open `go-course-advanced/src/memorylayout` in VS Code.
+
+2. If you disregard padding, how many bytes does a value of `User` take in memory? What if you include padding?
+
+3. Check your intuition first with `unsafe.Sizeof`, then by running
+
+  structlayout -json ./main.go User | structlayout-pretty
+
+4. Create an alternative type named `User2` whose memory layout minimizes padding.
+
+5. Check the memory layout of `User2`. Note the improvement over that of `User`.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+: structlayout -json ./main.go User | structlayout-optimize -json | structlayout-pretty
+
+
+
+* Microbenchmarks
+
+In addition to tests, the `testing` package allows you to write micro-benchmarks.
+
+Benchmark functions
+
+- are normal Go functions written in a "_test" suffixed source file;
+- are usually written in the same package as the production code;
+- must start with "Benchmark" followed by an uppercase letter;
+- must take a single parameter of type `*testing.B` and return no results.
+
+
+
+* Anatomy of microbenchmark function
+
+The _operation_ to benchmark is performed within a loop controlled by `b.N`:
+
+  func BenchmarkContainsNoIllegalPattern(b *testing.B) {
+    usernames := []string{"", "jub0bs", "abcTwitTerabd"}
+    for i := 0; i < b.N; i++ {
+      for _, username := range usernames {
+        containsNoIllegalPattern(username)
+      }
+    }
+  }
+
+
+
+* Running microbenchmarks
+
+A good command for running benchmarks is the following:
+
+  go test -run=^$ -bench . -benchmem -benchtime=3s
+
+Explanation of the different flags:
+
+- `-run=^$` is to prevent normal test functions from running.
+- `-bench` takes a regexp corresponding to the names of benchmark functions to run.
+- `-benchmem` outputs additional information about memory allocations.
+- `-benchtime` controls the length each benchmark function must be run for.
+
+
+
+* Interpreting microbenchmark results
+
+  go test -run=^$ -bench . -benchmem -benchtime=3s
+
+will print something like
+
+  BenchmarkX-8    36707469    94.93 ns/op    16 B/op   1 allocs/op
+  BenchmarkY-8     4811384    249.7 ns/op     0 B/op   0 allocs/op
+
+The respective columns correspond to
+
+- the name of the benchmark function suffixed by the the value of `GOMAXPROCS` used,
+- the number of operations performed during the whole benchmark,
+- the average time taken by each _operation_ (one iteration of the benchmark loop),
+- the number of bytes allocated per operation,
+- the number of allocations per operation.
+
+
+
+* Exercise: benchmark an alternative implementation
+
+1. Open `go-course-advanced/src/namecheck` in VS Code.
+
+2. While keeping the original `containsNoIllegalPattern` function, write an alternative implementation.
+
+3. Write benchmarks for the two competing implementations.
+
+4. Run those benchmarks.
+
+5. Which implementation do you favor? Why?
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Reducing the size of binaries
+
+Go executables are statically linked: they embark all they need for the program to run.
+As a result, their size can perceived as greater than needed.
+
+You can reduce the size of a Go binary by [[https://pkg.go.dev/cmd/link/#hdr-Command_Line][omiting symbol tables and debug information]]:
+
+  go build -ldflags="-s -w" main.go
+
+You can further reduce the size of Linux binaries with [[https://upx.github.io/][UPX (the Ultimate Packer for eXecutables)]]:
+
+  upx --brute main
+
+See [[https://blog.filippo.io/shrink-your-go-binaries-with-this-one-weird-trick/][Filippo Valsorda - Shrink your Go binaries with this one weird trick]].
+
+: smaller size => less startup time in Docker environment
+: executable autoportant
+: runtime: Go scheduler, GC, memory allocator, etc.
+: compare to Java, though. Whole JVM! A bit better since Java 9, I guess.
+
+
+
+* Exercise: reduce the size of a "Hello, World!" program
+
+1. Write a simple "Hello, World!" program.
+
+2. Compile it for Linux. Inspect the size of the resulting binary.
+
+3. Recompile the program but remove the symbol tables and debug info. Is the resulting binary smaller. By how much?
+
+4. Install UPX. Run upx on the binary resulting from step 3. Is the resulting binary smaller?
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Security
+
+: Go tends to be safer... TODO
+: No memory bugs (buffer overflow) unless `unsafe` is used
+: sound os.exec package
+: templating library
+
+
+
+* Design secure-by-default enums
+
+The zero values of "enum" types should be secure / low-privilege.
+
+Let's say you design types `User` and `Role` as follows:
+
+  type User struct {
+    Name string
+    Role Role
+  }
+
+  type Role int
+  const (
+    Admin Role = iota
+    Employee
+    Collaborator
+    Anonymous
+  )
+
+What's the problem?
+
+
+
+* Design secure-by-default enums (cont'd)
+
+If a `User` is instanciated without specifying a `Role`, the user is automatically admin!
+
+  user := User{Name: "Julien"}
+  fmt.Println(user.Role == Admin) // true
+
+Instead, design the `Role` enum as follows:
+
+  type Role int
+  const (
+    Anonymous Role = iota
+    Collaborator
+    Employee
+    Admin
+  )
+
+
+
+* Do use the go.sum file
+
+The modules system allows you to check the integrity (though not the trustworthiness!) of your dependencies.
+
+Once you've added depencies to your project, hash values of their content are saved to the `go.sum`.
+
+If the version you depend changes, its hash will change, indicating an integrity issue.
+
+Don't delete your `go.sum` file! Keep it under version control.
+
+Use `go`mod`verify` to detect integrity issues in your CI/CD pipelines.
+
+
+
+* Exercise: simulate and detect an integrity issue
+
+1. Open `go-course-advanced/src/namecheck` in VS Code.
+
+2. Empty the module cache by running
+
+  go clean -modcache
+
+3. Simulate an integrity issue by changing one character in the hash value in `go.sum`.
+
+4. Check for integrity issues
+
+  go mod verify
+
+5. Now delete `go.sum` and repeat steps 2 to 4.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 150 _
+
+
+
+* Don't allow unbounded concurrency
+
+As discussed before, a failure to limit the level of concurrency can cause issues.
+
+If users can indirectly spawn many goroutines via a malicious request, they may be able to cause a denial of service.
+
+In such cases, avoid using the fan-out pattern.
+
+.image https://go.dev/blog/store/gophers.jpg 200 _
+
+
+
+* Be wary of race conditions
+
+Race conditions can compromise the security of your application:
+
+  func Serve(queue chan *http.Request) {
+    for req := range queue {
+      go func() {
+        respond(req)
+      }()
+    }
+  }
+
+See [[https://www.youtube.com/watch?v=4CrL3Ygh7S0][Roberto Clapis - Goroutines: The Dark Side of the Runtime (GopherCon UK 2018)]].
+
+Run your tests with the `-race` flag to detect data races.
+
+
+
+* Do use the proper templating engine
+
+The core library provides two similar packages: `text/template` and `html/template`.
+
+Both packages have "template" as default package name and have very similar APIs. However,
+
+- `html/template` [[https://pkg.go.dev/html/template/#hdr-Introduction][output-encodes content in a context-aware fashion]] (HTML, CSS, JS),
+- `text/template` output-encodes nothing.
+
+If you use HTML templates server-side, make sure you use `html/template` rather than `text/template`! Otherwise, you run the risk of XSS.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/science/gas-mask.svg 200 _
+
+: https://pkg.go.dev/html/template/#hdr-Introduction
+: sadly, goimports text/template rather than html/template
+
+
+
+* Don't expose pprof to the world
+
+Exposing `pprof` data to the world reveals possibly information useful to attackers, including the Go version, dependencies, [[https://owasp.org/www-community/attacks/Full_Path_Disclosure][the web root]], behavior under load, etc.
+
+See, for example, the following bug-bounty reports:
+
+- [[https://hackerone.com/reports/783807][Multiple Information Disclosure with Go PPROF on api-ne.mackeeper.com]]
+- [[https://hackerone.com/reports/1102283][CVE-2019-11248 on alertmanager.ev-cloud-platform.engelvoelkers.com]]
+- [[https://hackerone.com/reports/1247910][Exposed Golang debugger on tier3.riot.mail.ru:9090, 9080]]
+
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/science/gas-mask.svg 200 _
+
+
+
+* Exercise: find exposed pprof endpoints in the wild
+
+1. Run the following Google search:
+
+  inurl:"debug/pprof" -intitle:"debug/pprof"
+
+2. You should be able to find some servers that have exposed `pprof` to the Internet.
+
+3. Select one, and see what information you can glean from its `pprof` endpoints.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+
+* Don't expose pprof to the world (cont'd)
+
+The problem is that a blank import of the `net/http/pprof` package registers the pprof handlers on the [[https://pkg.go.dev/net/http#DefaultServeMux][`http.DefaultServeMux`]], which robs you of the opportunity to put them behind some authentication/authorization.
+
+Instead, you should use a custom [[https://pkg.go.dev/net/http#ServeMux][`http.ServeMux`]].
+You can either manually register the pprof handlers on the same custom mux you use for your other normal handlers.
+TODO
+https://blog.cloudflare.com/exposing-go-on-the-internet/#servemux
+This approach allows you to
+
+- either wrap the mux in some auth middleware,
+- or [[https://mmcloughlin.com/posts/your-pprof-is-showing][bind it to a separate port]] and prevent access to it at the reverse-proxy level.
+
+: https://twitter.com/goinggodotnet/status/1405288617128325120
+: don't use the default ServeMux
+
+
+* Don't rely on the default HTTP server and client
+
+You don't necessarily need to barricade your Go server behind a reverse proxy.
+
+However, you shouldn't rely on the default HTTP server and client, in part because they never time out.
+
+See [[https://blog.cloudflare.com/exposing-go-on-the-internet][Filippo Valsorda - So you want to expose Go on the Internet]].
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/science/gas-mask.svg 200 _
+
+
+
+* Content sniffing in HTTP responses
+
+If you don't set the `Content-Type` header on your HTTP responses, the `net/http` package tries to guess the content type with [[https://pkg.go.dev/net/http/#DetectContentType][function `DetectContentType`]].
+
+If the response body is controlled (at least to an extent) by the user, failing to specify the content type can result in issues like XSS.
+
+See [[https://changelog.com/gotime/101#transcript-104][Go Time podcast #101]].
+
+Besides, calls to `DetectContentType` incur a performance hit.
+
+Explicitly set the content type on all responses. Use a middleware if you have to.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/science/gas-mask.svg 200 _
+
+: https://stackoverflow.com/questions/41109065/golang-gin-gonic-content-type-not-setting-to-application-json-with-c-json
+
+
+
+* Exercise: content sniffing leading to XSS
+
+1. Open `go-course-advanced/src/sniffing` in VS Code.
+
+2. After studying the code, start the server.
+
+3. Visit `http://localhost:8080/?msg=Hello,%20World!` in your browser. Inspect the body and headers in the response.
+
+4. Manipulate the URL to cause an alert box to pop up on `localhost:8080`.
+
+5. Remedy this security flaw.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+: expect text/plain, but didn't anticipate that it could be otherwise
+: also, validate the content type of HTTP requests
+
+
+
+* Don't leak internal error messages to HTTP responses
+
+Doing so can reveal sensitive information about your system.
+
+  func handle(w http.ResponseWriter, r *http.Request) {
+    // ...
+    data, err := readFromDB(ctx)
+    if err != nil {
+      w.WriteHeader(http.StatusInternalServerError)
+      fmt.Fprint(w, err)
+      return
+    }
+    // ...
+  }
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/science/gas-mask.svg 200 _
+
+: SCA ? a way to know which versions of Go and packages run where?
+
+
+
+* Request smuggling
+
+Also known as _HTTP_desync_, request smuggling affects
+
+- Go 1.x.x versions prior to 1.12.10, and
+- Go 1.13 versions prior to 1.13.1.
+
+In some settings, a frontend server and a backend server may reuse TLS connections in order to stream HTTP requests and responses between them more efficiently.
+
+
+
+* Request smuggling (cont'd)
+
+_Request_smuggling_ becomes possible when the two servers don't agree on where a HTTP request ends and the next one starts.
+
+.image https://i0.wp.com/lab.wallarm.com/wp-content/uploads/2021/04/3-min.jpg 400 _
+
+
+
+* Request smuggling (cont'd)
+
+Attackers may exploit this confusion to _smuggle_ malicious requests to the backend server, in order to
+
+- elevate their privileges
+- leak sensitive data from legitimate users
+- mass-exploit otherwise harmless bugs
+- etc.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/science/gas-mask.svg 200 _
+
+
+
+* Request smuggling (cont'd)
+
+Resources:
+
+- [[https://portswigger.net/research/http-desync-attacks-request-smuggling-reborn][James Kettle - HTTP Desync Attacks: Request Smuggling Reborn]]
+- [[https://en.99designs.fr/blog/engineering/request-smuggling/][99designs - Request smuggling between Amazon ALBs and Go net/http]]
+- [[https://hackerone.com/reports/498052][James Kettle - Password theft login.newrelic.com via Request Smuggling]]
+- [[https://nvd.nist.gov/vuln/detail/CVE-2019-16276][CVE-2019-16276 (NIST NVD)]]
+- [[https://groups.google.com/g/golang-announce/c/cszieYyuL9Q][golang-announce Google Group - [security] Go 1.13.1 and Go 1.12.10 are released]]
+
+
+
+* Request smuggling (cont'd)
+
+Mitigation: pdate all server code!
+
+- If possible, update to latest Go version.
+- If stuck at 1.13.x, update to 1.13.1.
+- If stuck at 1.12.x, update to 1.12.10.
+- If stuck before that... good luck!
+
+In general, endeavor to use HTTP/2 between frontend and backend servers.
+
+
+
+* Path traversal
+
+A path-traversal vulnerability allows an attacker to access arbitrary files on the server, including outside the web root.
+
+You should validate and/or sanitize all user-supplied input, especially if you build a file path out of it.
+
+A recent example is [[https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-43798][CVE-2021-43798]], a path-traversal vulnerability in Grafana (affecting v8.0.0-beta1 through v8.3.0) that allowed attackers to perform local-file inclusion.
+
+Resources:
+
+- [[https://j0vsec.com/post/cve-2021-43798/][CVE-2021-43798 - Path-traversal vulnerability in Grafana]]
+- [[https://twitter.com/TomNomNom/status/1468521389623808002][https://twitter.com/TomNomNom/status/1468521389623808002]]
+
+
+
+* Exercise: path traversal leading to local file inclusion
+
+1. Open `go-course-advanced/src/lfi` in VS Code.
+
+2. After studying the code, start the server.
+
+3. Visit `http://localhost:8081/static/dinosaur.txt` in your browser.
+
+4. Try to access files outside the `static` folder by manipulating the path in your browser's address bar. What prevents you from doing so?
+
+5. Repeat step 4 using `curl` with its `--path-as-is` flag. Can you read `/etc/passwd`?
+
+6. Fix the security flaw by changing the server code.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Beware CORS misconfigurations
+
+[[https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS][Cross-Origin Resource Policy]] is a protocol for selectively relaxing some of the [[https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy][Same-Origin Policy]]’s restrictions.
+
+Many developers notoriously do not have a firm grasp of CORS, and incorrect assumptions about that protocol are fodder for cross-origin abuse by more savvy attackers. This isn't specific to Go.
+
+However, some Go CORS middleware are a bit too helpful for the good of their users, who can easily configure CORS insecurely without realizing it.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/science/gas-mask.svg 200 _
+
+
+
+* Exercise: exploit a CORS misconfiguration
+
+1. Open `go-course-advanced/src/cors-misconfig` in VS Code. It contains a minimal Echo server configured for CORS.
+
+2. Read [[https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#credentialed_requests_and_wildcards][https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#credentialed_requests_and_wildcards]].
+
+3. Inspect the [[https://github.com/labstack/echo/blob/master/middleware/cors.go][source code of Echo's CORS middleware]]. Do you notice anything?
+
+4. As the victim, log in as the admin. As the attacker, mount a cross-site attack against the victim in order to exfiltrate the contents of the admin page.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* JSON interoperability issues
+
+The JSON format is [[http://seriot.ch/parsing_json.php][under-specified]].
+
+In particular, a JSON object that contains two homonymous fields is considered legal:
+
+  {
+    "id": 42,
+    "token": "xxxxxxxxxxxxx"
+    "name": "jub0bs",
+    "interests": [
+      "security",
+      "go",
+      "trolling LREM on Twitter"
+    ],
+    "id": 666
+  }
+
+In practice, JSON-parsing libraries retain only one value, ignoring the other.
+
+
+
+* JSON interoperability issues
+
+In a microservices architecture, when a frontend server and a backend server use different JSON libraries that disagree, security issues can arise.
+
+.image img/json_desync.svg 300 _
+
+See
+
+- [[https://labs.bishopfox.com/tech-blog/an-exploration-of-json-interoperability-vulnerabilities][Jake Miller - An Exploration of JSON Interoperability Vulnerabilities]]
+- [[https://justi.cz/security/2017/11/14/couchdb-rce-npm.html][Max Justicz - Remote Code Execution in CouchDB]]
+
+: not specific to Go, but Go
+: BFF responsible for auth
+
+
+
+* JSON interoperability issues: mitigation
+
+There are multiple competing JSON-parsing libraries in the Go ecosystem:
+
+- `encoding/json`
+- `github.com/valyala/fastjson`
+- `github.com/json-iterator/go`
+- `github.com/mailru/easyjson`
+- `github.com/wI2L/jettison`
+- etc.
+
+Review which JSON-parsing libraries are used in your microservices architecture.
+
+If you use different libraries, make sure they don't suffer from interoperability issues.
+
+If possible, stick to a single JSON-parsing library throughout your system.
+
+
+
+* Fuzzing
+
+
+* What is fuzzing?
+
+[[https://en.wikipedia.org/wiki/Fuzzing][Fuzzing]] (a.k.a. fuzz testing) consists in throwing random inputs at a function to reveal security issues in its implementation.
+
+Fuzzing is a type of [[https://en.wikipedia.org/wiki/Property_testing][property-based testing]] with a strong focus on security rather than correctness.
+
+[[https://go.dev/blog/go1.18#fuzzing][Since Go 1.18]], fuzzing has [[https://pkg.go.dev/testing#hdr-Fuzzing][first-class support]] in the Go toolchain.
+
+: There were a number of third-party tools to do fuzz testing in Go.
+: crash, or allow inputs it shouldn't
+
+
+
+* Fuzz functions
+
+In addition to tests and microbenchmarks, the `testing` package now allows you to write fuzzing tests.
+
+Fuzz functions
+
+- are normal Go functions written in a "_test" suffixed source file;
+- are usually written in the same package as the production code;
+- must start with "Fuzz" followed by an uppercase letter;
+- must take a single parameter of type `*testing.F` and return no results.
+
+
+
+* Structure of a fuzz function
+
+  func FuzzReverse(f *testing.F) {
+    // arrange: populate the seed corpus
+    testcases := []string{"Hello, world", " ", "!12345"}
+    for _, tc := range testcases {
+      f.Add(tc)
+    }
+    f.Fuzz(func(t *testing.T, orig string) {
+      // act: exercise the function
+      rev := Reverse(orig)
+      doubleRev := Reverse(rev)
+      // assert: verify that one or more properties hold
+      if orig != doubleRev {
+        t.Errorf("Before: %q, after: %q", orig, doubleRev)
+      }
+      if utf8.ValidString(orig) && !utf8.ValidString(rev) {
+        t.Errorf("Reverse produced invalid UTF-8 string %q", rev)
+      }
+    })
+  }
+
+: corpus: set of values used to derive random ones
+
+
+
+* Running fuzz tests
+
+To run the fuzz tests only on the seed corpus (without actual fuzzing), run
+
+  go test
+
+To start fuzzing, run
+
+  go test -fuzz=Fuzz
+
+If any input is found to falsify the properties, it gets written to
+
+  testdata/fuzz/NAME_OF_FUZZ_FUNCTION/SOME_HASH_VALUE
+
+and becomes part of the corpus.
+
+
+
+* What to fuzz?
+
+Good candidates include functions that parse text and have security requirements and/or are not supposed to panic.
+
+Any example from the core library?
+
