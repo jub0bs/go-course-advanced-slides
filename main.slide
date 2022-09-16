@@ -2424,7 +2424,7 @@ As discussed before, a failure to limit the level of concurrency can cause issue
 
 If users can indirectly spawn many goroutines via a malicious request, they may be able to cause a denial of service.
 
-In such cases, avoid using the fan-out pattern.
+In such cases, avoid using the fan-out pattern. Prefer a semaphore.
 
 .image https://go.dev/blog/store/gophers.jpg 200 _
 
@@ -2513,6 +2513,7 @@ This approach allows you to
 : don't use the default ServeMux
 
 
+
 * Don't rely on the default HTTP server and client
 
 You don't necessarily need to barricade your Go server behind a reverse proxy.
@@ -2580,63 +2581,6 @@ Doing so can reveal sensitive information about your system.
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/science/gas-mask.svg 200 _
 
 : SCA ? a way to know which versions of Go and packages run where?
-
-
-
-* Request smuggling
-
-Also known as _HTTP_desync_, request smuggling affects
-
-- Go 1.x.x versions prior to 1.12.10, and
-- Go 1.13 versions prior to 1.13.1.
-
-In some settings, a frontend server and a backend server may reuse TLS connections in order to stream HTTP requests and responses between them more efficiently.
-
-
-
-* Request smuggling (cont'd)
-
-_Request_smuggling_ becomes possible when the two servers don't agree on where a HTTP request ends and the next one starts.
-
-.image https://i0.wp.com/lab.wallarm.com/wp-content/uploads/2021/04/3-min.jpg 400 _
-
-
-
-* Request smuggling (cont'd)
-
-Attackers may exploit this confusion to _smuggle_ malicious requests to the backend server, in order to
-
-- elevate their privileges
-- leak sensitive data from legitimate users
-- mass-exploit otherwise harmless bugs
-- etc.
-
-.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/science/gas-mask.svg 200 _
-
-
-
-* Request smuggling (cont'd)
-
-Resources:
-
-- [[https://portswigger.net/research/http-desync-attacks-request-smuggling-reborn][James Kettle - HTTP Desync Attacks: Request Smuggling Reborn]]
-- [[https://en.99designs.fr/blog/engineering/request-smuggling/][99designs - Request smuggling between Amazon ALBs and Go net/http]]
-- [[https://hackerone.com/reports/498052][James Kettle - Password theft login.newrelic.com via Request Smuggling]]
-- [[https://nvd.nist.gov/vuln/detail/CVE-2019-16276][CVE-2019-16276 (NIST NVD)]]
-- [[https://groups.google.com/g/golang-announce/c/cszieYyuL9Q][golang-announce Google Group - [security] Go 1.13.1 and Go 1.12.10 are released]]
-
-
-
-* Request smuggling (cont'd)
-
-Mitigation: pdate all server code!
-
-- If possible, update to latest Go version.
-- If stuck at 1.13.x, update to 1.13.1.
-- If stuck at 1.12.x, update to 1.12.10.
-- If stuck before that... good luck!
-
-In general, endeavor to use HTTP/2 between frontend and backend servers.
 
 
 
