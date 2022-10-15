@@ -559,7 +559,7 @@ Moreover, you are free to add other options later. Here's an example:
 
   func (t timeoutOption) applyTo(cfg *config) error {
     if t <= 0 {
-      return fmt.Errorf("negative timeout: %d", t)
+      return fmt.Errorf("nonpositive timeout: %v", time.Duration(t))
     }
     cfg.timeout = time.Duration(t)
     return nil
@@ -571,21 +571,21 @@ Moreover, you are free to add other options later. Here's an example:
 
 Because the signature of `Open` doesn't change, you would only need to release a new minor version (1.x) as opposed to a major version (2.0) of your package.
 
+: TODO: perhaps mention my twist: https://twitter.com/jub0bs/status/1581315746382381056
+
 
 
 * Alternative implementations for functional options
 
 Functional options can also be implemented in different ways.
 
-In [[https://commandcenter.blogspot.com/2014/01/self-referential-functions-and-design.html][Rob Pike]]'s and [[https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis][Dave Cheney]]'s favored approaches, the option type is based on a function type that operates on the type that must be configured (`Connection`, here):
+In [[https://commandcenter.blogspot.com/2014/01/self-referential-functions-and-design.html][Rob Pike]]'s and [[https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis][Dave Cheney]]'s favored approaches, the option type is based on a function type rather than on an interface type.
 
-  type Option func(*Connection) error
-
-I personally prefer the approach described in [[https://github.com/uber-go/guide/blob/master/style.md#functional-options][Uber's Go style guide]], because it's more explicit about the fact that the set of options isn't extensible.
+Personally, I tend to favor the approach described in [[https://github.com/uber-go/guide/blob/master/style.md#functional-options][Uber's Go style guide]] because, although it requires writing more code, it clarifies that the set of options isn't extensible.
 
 Choose whichever approach you prefer, but do learn to recognize cases where functional options would be useful.
 
-.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/witch-learning.svg 150 _
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/witch-learning.svg 200 _
 
 
 
