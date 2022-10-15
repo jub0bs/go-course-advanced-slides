@@ -338,44 +338,100 @@ No need for dependency-injection frameworks in Go! Interfaces are enough!
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/king.svg 200 _
 
 
-
-* Functional options: a motivational example
-
-Imagine you're developing a library that provides a function named `Open`, which tries to connect to a database:
-
-  func Open(addr string, cache bool, logger log.Logger) (*Connection, error)
-
-An address must always be specified; callers must also specify whether they wish to use caching and/or a logger.
-
-Remember that Go has no support for optional parameters: callers of a function must provide one argument per parameter. Why, then, is `Open`'s signature problematic?
+* Functional options
 
 
 
-* Functional options: a motivational example (cont'd)
+* A motivational example
 
-Clients of your package who don't need caching and/or a logger are forced to pass no-op arguments to `Open`:
+Imagine you're developing a package named `db` that exports a function named `Open`, which attempts to establish a connection to a database:
+
+  package db
+
+  func Open(
+    addr string,
+    cache bool,
+    logger log.Logger,
+  ) (*Connection, error)
+
+An address must always be specified.
+
+Callers must also specify whether they wish to use caching and/or a logger.
+
+
+
+* Why Open's API is problematic
+
+  func Open(
+    addr string,
+    cache bool,
+    logger log.Logger,
+  ) (*Connection, error)
+
+*It's*not*expressive.* Callers have no way to tell which parameters are optional.
+
+
+
+* Why Open's API is problematic
+
+  func Open(
+    addr string,
+    cache bool,
+    logger log.Logger,
+  ) (*Connection, error)
+
+*It's*cumbersome.* In Go, callers of a function must provide one argument per parameter. Therefore, callers of your `Open` function who don't need caching and/or logging are forced to pass no-op arguments just to keep the compiler happy:
 
   db.Open(addr, db.DefaultCache, zap.NewNop())
+
   db.Open(addr, db.DefaultCache, log)
+
   db.Open(addr, false, zap.NewNop())
+
   db.Open(addr, false, log)
 
-Moreover, you cannot easily evolve `Open`'s API. For instance, if you're using [[https://semver.org/][semantic versioning]], adding a parameter to the `Open` function would require the release of a new major version of your library:
-
-  func Open(addr string, cache bool, logger log.Logger, timeout time.Duration) (*Connection, error)
+: Remember that Go has no support for optional parameters
 
 
 
-* Functional options: a motivational example (cont'd)
+* Why Open's API is problematic
 
-One solution would be to provide a variant for each possible combination, but the resulting API is unwieldy:
+  func Open(
+    addr string,
+    cache bool,
+    logger log.Logger,
+  ) (*Connection, error)
+
+*It's*hard*to*evolve.* For instance, if you're using [[https://semver.org/][semver]], adding a parameter to the `Open` function would require the release of a new major version of your library:
+
+  func Open(
+    addr string,
+    cache bool,
+    logger log.Logger,
+    timeout time.Duration,
+  ) (*Connection, error)
+
+
+
+* One possible solution: provide multiple variants
+
+One solution is to provide multiple variants of the `Open` function, one for each possible combination:
 
   func Open(addr string) (*Connection, error)
+
   func OpenWithCaching(addr string) (*Connection, error)
+
   func OpenWithLogger(addr string, logger log.Logger) (*Connection, error)
+
   func OpenWithCachingAndLogger(addr string, logger log.Logger) (*Connection, error)
 
-Another solution would be to gather all the configuration in a struct type, but the resulting API isn't very expressive and merely displaces the problem:
+However, the resulting API becomes overwhelmingly complex as the number of combinations grows...
+
+
+
+* Another possible solution: use a configuration struct
+
+Another solution consists in gathering all the configuration in a struct type and ask callers to pass that to the `Open` function:
 
   type Config struct {
     Addr    string
@@ -385,108 +441,151 @@ Another solution would be to gather all the configuration in a struct type, but 
 
   func Open(config Config) (*Connection, error)
 
+The resulting API is more evolvable and less cumbersome, but still lacks expressiveness. Moreover, sensible defaults must rely on the zero values of `Config`'s fields, which may have valid semantics. More about this consideration in [[https://www.youtube.com/watch?v=24lFtGHWxAQ&t=4m44s][Dave Cheney's talk]].
+
+: TODO: add a slide about the builder pattern and mention it's not considered idiomatic in Go
+
 
 
 * Functional options to the rescue
 
-One useful pattern for making an API easier to use and evolve is _functional_options_.
+A compelling pattern known as _functional_options_ leads to a much better API:
 
-Declare an unexported struct for storing the values of optional parameters:
+  db.Open(addr)
 
-  type options struct {
+  db.Open(addr, db.WithLogger(log))
+
+  db.Open(addr, db.WithCache(false))
+
+  db.Open(addr, db.WithCache(false), db.WithLogger(log))
+
+This pattern essentially allows you to simulate support for optional parameters in Go, at the cost of some complexity (albeit hidden under the hood). Let's see how it's done...
+
+
+
+* Unexported config struct and exported Option interface
+
+Declare an *unexported* config struct for storing the values of optional parameters:
+
+  type config struct {
     cache bool
     logger log.Logger
   }
 
-Declare an exported interface with an unexported `apply` method:
+Declare an exported interface with an unexported `applyTo` method, whose purpose is to update a `config` value:
 
   type Option interface {
-    apply(*options)
+    applyTo(*config) error
   }
 
-Make `Open` take a `...Option` parameter in addition to its mandatory parameter(s):
+Now make the `Open` function take a variadic `...Option` parameter in addition to its mandatory parameter(s):
 
   func Open(addr string, opts ...Option) (*Connection, error)
 
 
 
-* Functional options to the rescue (cont'd)
+* Implementing the different options
 
 For each option, declare an unexported struct type and an exported factory function:
 
-  type cacheOption bool
+  type cacheOption struct{}
 
-  func (c cacheOption) apply(opts *options) {
-    opts.cache = bool(c)
+  func (c *cacheOption) applyTo(cfg *config) error {
+    cfg.cache = true
+    return nil
   }
 
   func WithCache(c bool) Option {
-    return cacheOption(c)
+    return new(cacheOption)
   }
 
-and
 
-  type loggerOption struct { Log log.Logger }
 
-  func (l loggerOption) apply(opts *options) {
-    opts.logger = l.Log
+* Implementing the different options (cont'd)
+
+For each option, declare an unexported struct type and an exported factory function:
+
+  type loggerOption log.Logger
+
+  func (l loggerOption) applyTo(cfg *config) error {
+    cfg.logger = log.Logger(l)
+    return nil
   }
 
   func WithLogger(log log.Logger) Option {
-    return loggerOption{Log: log}
+    return loggerOption(log)
   }
 
 
 
-* Functional options to the rescue (cont'd)
+* Applying the different options
 
-At the top of the `Open` function, range over the specific options and apply each one:
+Finally, at the top of the `Open` function, range over the specified options and apply each one to a `config` value.
 
   func Open(addr string, opts ...Option) (*Connection, error) {
-    var options options
+    var cfg config
     for _, o := range opts {
-      o.apply(&options)
+      err := o.applyTo(&cfg)
+      if err != nil {
+        return nil, err
+      }
     }
-    // if some options are mutually incompatible, return an error
-    // otherwise, open the connection with the specified options
+    // omitted 
   }
 
+If the resulting config doesn't make sense, perhaps due to some mutually incompatible options, error out. Otherwise, proceed with the happy path.
 
 
-* Functional options to the rescue (cont'd)
+
+* Functional options in action
 
 Then, clients of your package are free to specify only the options they need:
 
   db.Open(addr)
-  db.Open(addr, db.WithLogger(log))
-  db.Open(addr, db.WithCache(false))
-  db.Open(addr, db.WithCache(false), db.WithLogger(log))
 
-Moreover, you can always add another option later:
+  db.Open(addr, db.WithLogger(log))
+
+  db.Open(addr, db.WithCache())
+
+  db.Open(addr, db.WithCache(), db.WithLogger(log))
+
+
+
+* Adding another option
+
+Moreover, you are free to add other options later. Here's an example:
 
   type timeoutOption time.Duration
 
-  func (t timeoutOption) apply(opts *options) {
-    opts.timeout = time.Duration(c)
+  func (t timeoutOption) applyTo(cfg *config) error {
+    if t <= 0 {
+      return fmt.Errorf("negative timeout: %d", t)
+    }
+    cfg.timeout = time.Duration(t)
+    return nil
   }
 
   func WithTimeout(t time.Duration) Option {
     return timeoutOption(t)
   }
 
-Because the signature of `Open` doesn't change, you'll only need to release a new minor (as opposed to major) version of your package.
+Because the signature of `Open` doesn't change, you would only need to release a new minor version (1.x) as opposed to a major version (2.0) of your package.
 
 
 
-* Resources about functional options
+* Alternative implementations for functional options
 
-- [[https://commandcenter.blogspot.com/2014/01/self-referential-functions-and-design.html][Rob Pike - Self-referential functions and the design of options]]
-- [[https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis][Dave Cheney - Functional options for friendly APIs]]
-- [[https://github.com/uber-go/guide/blob/master/style.md#functional-options][Uber Go style guide - functional options]]
+Functional options can also be implemented in different ways.
 
-.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/witch-learning.svg 200 _
+In [[https://commandcenter.blogspot.com/2014/01/self-referential-functions-and-design.html][Rob Pike]]'s and [[https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis][Dave Cheney]]'s favored approaches, the option type is based on a function type that operates on the type that must be configured (`Connection`, here):
 
-: This is just one way of implementing _functional_options_; other people use closures.
+  type Option func(*Connection) error
+
+I personally prefer the approach described in [[https://github.com/uber-go/guide/blob/master/style.md#functional-options][Uber's Go style guide]], because it's more explicit about the fact that the set of options isn't extensible.
+
+Choose whichever approach you prefer, but do learn to recognize cases where functional options would be useful.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/witch-learning.svg 150 _
 
 
 
