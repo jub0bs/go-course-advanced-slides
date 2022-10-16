@@ -495,7 +495,7 @@ For each option, declare an unexported struct type and an exported factory funct
     return nil
   }
 
-  func WithCache(c bool) Option {
+  func WithCache() Option {
     return new(cacheOption)
   }
 
@@ -549,29 +549,43 @@ Then, clients of your package are free to specify only the options they need:
 
   db.Open(addr, db.WithCache(), db.WithLogger(log))
 
+Moreover, you're free to add other options to your `db` package later!
+
+And because the signature of `Open` doesn't change, you would only need to release a new minor version (1.x) as opposed to a major version (2.0) of your package.
 
 
-* Adding another option
 
-Moreover, you are free to add other options later. Here's an example:
+* Exercise: add timeout option
 
-  type timeoutOption time.Duration
+1. Open `go-course-advanced/src/funcopts` in VS Code.
 
-  func (t timeoutOption) applyTo(cfg *config) error {
-    if t <= 0 {
-      return fmt.Errorf("nonpositive timeout: %v", time.Duration(t))
-    }
-    cfg.timeout = time.Duration(t)
-    return nil
-  }
+2. Add a factory method named `WithTimeout` that has a `time.Duration` parameter and returns an `Option`.
 
-  func WithTimeout(t time.Duration) Option {
-    return timeoutOption(t)
-  }
+3. Declare an unexported type for the new option that satisfies the `Option` interface.
 
-Because the signature of `Open` doesn't change, you would only need to release a new minor version (1.x) as opposed to a major version (2.0) of your package.
+4. Make its `applyTo` return a non-nil error if the specified timeout is not positive.
 
-: TODO: perhaps mention my twist: https://twitter.com/jub0bs/status/1581315746382381056
+5. Finally, in the call to `Open` in the `main` function, use your new timeout option.
+Try a positive and then a nonpositive value.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+:  type timeoutOption time.Duration
+:
+:  func (t timeoutOption) applyTo(cfg *config) error {
+:    if t <= 0 {
+:      return fmt.Errorf("nonpositive timeout: %v", time.Duration(t))
+:    }
+:    cfg.timeout = time.Duration(t)
+:    return nil
+:  }
+:
+:  func WithTimeout(t time.Duration) Option {
+:    return timeoutOption(t)
+:  }
+
+
+: TODO: perhaps mention my twist for frontloading the argument validation
 
 
 
@@ -581,11 +595,11 @@ Functional options can also be implemented in different ways.
 
 In [[https://commandcenter.blogspot.com/2014/01/self-referential-functions-and-design.html][Rob Pike]]'s and [[https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis][Dave Cheney]]'s favored approaches, the option type is based on a function type rather than on an interface type.
 
-Personally, I tend to favor the approach described in [[https://github.com/uber-go/guide/blob/master/style.md#functional-options][Uber's Go style guide]] because, although it requires writing more code, it clarifies that the set of options isn't extensible.
+I favor a style closer to that described in [[https://github.com/uber-go/guide/blob/master/style.md#functional-options][Uber's style guide]] because, although it requires more code to declare an option, it clarifies that the set of options isn't extensible.
 
-Choose whichever approach you prefer, but do learn to recognize cases where functional options would be useful.
+Choose whichever style you prefer, but do learn to recognize cases where functional options would be useful.
 
-.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/witch-learning.svg 200 _
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/sage.svg 200 _
 
 
 
