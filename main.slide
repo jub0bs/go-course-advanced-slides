@@ -148,20 +148,11 @@ form a one-to-one correspondence.
 
 * Use separate types for data-transfer objects
 
-Not all types can or should be fully encapsulated. In particular, package such as `encoding/json` require you to export struct fields.
+Not all types can or should be fully encapsulated. In particular, packages such as `encoding/json` require you to export struct fields.
 
 However, resist the temptation to design your business types as mere "property bags" and to use them through all the layers (from presentation to storage) of your application.
 
-.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/friends/stovepipe-hat-front.svg 300 _
-
-: using the same type throughout couples your database schema to the representations
-: encapsulation and security issues (mass assignment)
-: unlikely to be the bottleneck
-
-
-* Use separate types for data-transfer objects (cont'd)
-
-Instead, in addition to well-encapsulated business types,
+Instead, in addition to well-encapsulated business types...
 
   type User struct {
     id        int64
@@ -173,7 +164,14 @@ Instead, in addition to well-encapsulated business types,
     lastSeenAt time.Time
   }
 
-declare DTO types for command and queries to and results from your API:
+: using the same type throughout couples your database schema to the representations
+: encapsulation and security issues (mass assignment)
+: unlikely to be the bottleneck
+
+
+* Use separate types for data-transfer objects (cont'd)
+
+\... declare DTO types for command and queries to and results from your API:
 
   type UserSearchHitDTO struct {
     Id            int64                `json:"id"`
@@ -182,6 +180,10 @@ declare DTO types for command and queries to and results from your API:
     IsAdmin       bool                 `json:"isAdmin"`
     LastSeenAt    time.Time            `json:"lastSeenAt"`
   }
+
+You can find [[https://github.com/grafana/grafana/blob/50c4430661a89f0c06f48839446064c0ea6bcf4f/pkg/models/org.go#L16][examples]] in Grafana's codebase.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/friends/stovepipe-hat.svg 200 _
 
 
 
@@ -372,6 +374,7 @@ Callers must also specify whether they wish to use caching and/or a logger.
 
 *It's*not*expressive.* Callers have no way to tell which parameters are optional.
 
+.image https://go.dev/blog/gopher/plush.jpg 250 _
 
 
 * Why Open's API is problematic
@@ -463,6 +466,8 @@ A compelling pattern known as _functional_options_ leads to a much better API:
 
 This pattern essentially allows you to simulate support for optional parameters in Go, at the cost of some complexity (albeit hidden under the hood). Let's see how it's done...
 
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/party/birthday.svg 200 _
+
 
 
 * Variadic Open func and exported Option interface
@@ -471,7 +476,7 @@ Make the `Open` function take a variadic `...Option` parameter in addition to it
 
   func Open(addr string, opts ...Option) (*Connection, error)
 
-Declare `Option` as an exported interface with an unexported `applyTo` method, whose purpose is to update a value of type `config`:
+Declare `Option` as an *exported* interface with an *unexported* `applyTo` method, whose purpose is to update a value of some type named `config`:
 
   type Option interface {
     applyTo(*config) error
@@ -479,12 +484,9 @@ Declare `Option` as an exported interface with an unexported `applyTo` method, w
 
 
 
-
-
-
 * Unexported config and option structs
 
-Declare `config` as an *unexported* struct used for storing the values of optional parameters:
+Declare `config` as an *unexported* struct type used for storing the values of optional parameters:
 
   type config struct {
     cache bool
@@ -495,7 +497,7 @@ Finally, declare an unexported `option` func type that satisfies the `Option` in
 
   type option func(*config) error
 
-  func (f *option) applyTo(cfg *config) error {
+  func (f option) applyTo(cfg *config) error {
     return f(cfg)
   }
 
@@ -513,9 +515,9 @@ Then, for each option, declare an exported factory function:
     return option(f)
   }
 
-  func WithLogger(log log.Logger) Option {
+  func WithLogger(logger log.Logger) Option {
     f := func(cfg *config) error {
-      cfg.logger = log.Logger(l)
+      cfg.logger = logger
       return nil
     }
     return option(f)
