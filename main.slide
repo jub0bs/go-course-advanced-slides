@@ -1,5 +1,5 @@
 Formation Go avancé
-13 September 2022
+12 December 2022
 
 Julien Cretel
 jcretel-infosec@protonmail.com
@@ -458,11 +458,11 @@ A compelling pattern known as _functional_options_ leads to a much better API:
 
   db.Open(addr)
 
-  db.Open(addr, db.WithLogger(log))
+  db.Open(addr, db.WithLogger(logger))
 
-  db.Open(addr, db.WithCache(false))
+  db.Open(addr, db.WithCache())
 
-  db.Open(addr, db.WithCache(false), db.WithLogger(log))
+  db.Open(addr, db.WithCache(), db.WithLogger(log))
 
 This pattern essentially allows you to simulate support for optional parameters in Go, at the cost of some complexity (albeit hidden under the hood). Let's see how it's done...
 
@@ -569,7 +569,7 @@ And because the signature of `Open` doesn't change, you would only need to relea
 
 2. Declare a factory function named `WithTimeout` that has a `time.Duration` parameter and returns an `Option`.
 
-3. Make the new timeout option return a non-nil error if the specified timeout is not positive.
+3. Make the `applyTo` methods of your new option return a non-nil error if the specified `time.Duration` value is not positive.
 
 4. Finally, in the call to `Open` in the `main` function, use your new timeout option.
 Try a positive and then a nonpositive value.
@@ -627,14 +627,16 @@ Use functional options liberally for initializing/configuring stuff (e.g. a midd
 
 Go takes a lightweight but powerful approach to documentation: the documentation of a package is simply written as comments in the package's source file(s).
 
-Document your packages and everything it exports. [[https://go.dev/blog/godoc][Follow the conventions]].
+Document your packages and everything it exports. Follow established conventions; see
 
-`golint`./...` will tell you (among other things) which symbols are exported but not documented.
+- [[https://go.dev/blog/godoc][Godoc: documenting Go code]] (2011)
+- [[https://tip.golang.org/doc/comment][Go Doc Comment]] (more precise and up to date)
 
 You can also write [[https://go.dev/blog/examples][executable examples]], which become part of your package's documentation and test suite.
 
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/witch-learning.svg 200 _
 
+: Linters will tell you (among other things) which symbols are exported but not documented.
 : package's doc: doc.go
 : each documentation comment is a complete sentence starting with the name of the element it describes.
 : documenting a package doesn't require a lot of effort
@@ -651,7 +653,7 @@ You can also write [[https://go.dev/blog/examples][executable examples]], which 
 
 4. Write an example test for `Twitter`'s `IsValid` method in `twitter/example_test.go`.
 
-5. Generate the documentation [[https://pkg.go.dev/golang.org/x/tools/cmd/godoc][using `godoc`]].
+5. Generate the documentation [[https://pkg.go.dev/golang.org/x/tools/cmd/godoc][using `godoc`]] or the [[https://pkg.go.dev/golang.org/x/pkgsite/cmd/pkgsite][newer `pkgsite` command]].
 
 6. Browse the generated doc and execute the example test in your browser.
 
@@ -1378,7 +1380,11 @@ See [[https://go.dev/play/p/9AocjmraWHC][this playground]] and [[https://stackov
 
 * A word to the wise
 
-Just because Go has generics doesn't mean that every type and function should be generic.
+Just because Go has generics doesn't mean that every type and function should be generic. Don't use generics if...
+
+- ...an interface would do. Instead, simply use that interface.
+- ...the implementation differs from one concrete type to another. Instead, declare a method on each of the relevant types.
+- ...you need absolute flexibility in terms of types you accept. Instead, use reflection.
 
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/sage.svg 200 _
 
@@ -1389,11 +1395,17 @@ Just because Go has generics doesn't mean that every type and function should be
 
 * Resources about generics
 
-- [[https://go.dev/doc/tutorial/generics][Tutorial: Getting started with generics]]
 - [[https://go.dev/ref/spec#Type_parameter_declarations][Type parameter declarations (language spec)]]
-- [[https://jub0bs.com/posts/2020-07-21-go-bimap/][A glimpse at parametric polymorphism in Go: designing a generic bidirectional map]]
+- [[https://jub0bs.com/posts/2020-07-21-go-bimap/][jub0bs - A glimpse at parametric polymorphism in Go: designing a generic bidirectional map (2020)]]
+- [[https://www.youtube.com/watch?v=Pa_e9EeCdy8][Robert Griesemer & Ian Lance Taylor - Generics! (GopherCon 2021)]]
+- [[https://www.youtube.com/watch?v=nr8EpUO9jhw][Ian Lance Taylor - Using Generics in Go (Go Day 2021 on Google Open Source Live)]]
+- [[https://go.dev/doc/tutorial/generics][Tutorial: Getting started with generics (2022)]]
+- [[https://www.youtube.com/watch?v=eU-w2psAvdA][Roger Peppe - Generics Unconstrained (GopherCon UK 2022)]]
+- [[https://www.youtube.com/watch?v=-F2t3oInqKE][Cameron Balahan & Cody Oss - Refactor Cloud applications in Go 1.18 with generics (Google I/O 2022)]]
 
-.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/witch-learning.svg 200 _
+
+
+* Concurrency refresher
 
 
 
@@ -1562,6 +1574,10 @@ In rare cases, in order not to break an existing API, you may have to store a co
 
 See [[https://go.dev/blog/context-and-structs][Contexts and structs]] on the Golang blog.
 
+The only legitimate use case for storing a context in a struct is when you need to retrofit an existing API for cancellation without altering that API. Example: [[https://pace.dev/blog/2020/02/03/context-aware-ioreader-for-golang-by-mat-ryer.html][making `io.Reader` context-aware]].
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/sage.svg 200 _
+
 : unless you have to
 
 
@@ -1640,7 +1656,7 @@ Context values should inform, not control the logic:
 
 - Bad candidates: logger, database connection, server options
 
-.image https://api.gretchenrubin.com/wp-content/uploads/sites/2/2015/03/Gollum-Ring.jpg 250 _
+.image https://i.imgflip.com/740vt4.jpg 250 _
 
 
 
