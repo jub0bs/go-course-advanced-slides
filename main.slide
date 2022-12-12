@@ -320,6 +320,8 @@ Stay away from `init` functions (if you can).
 
 Don't emulate the _registration_pattern_ (as implemented by the `database/sql` package).
 
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/sage.svg 200 _
+
 
 
 * Dependency injection
@@ -463,57 +465,60 @@ This pattern essentially allows you to simulate support for optional parameters 
 
 
 
-* Unexported config struct and exported Option interface
+* Variadic Open func and exported Option interface
 
-Declare an *unexported* config struct for storing the values of optional parameters:
+Make the `Open` function take a variadic `...Option` parameter in addition to its mandatory parameter(s):
+
+  func Open(addr string, opts ...Option) (*Connection, error)
+
+Declare `Option` as an exported interface with an unexported `applyTo` method, whose purpose is to update a value of type `config`:
+
+  type Option interface {
+    applyTo(*config) error
+  }
+
+
+
+
+
+
+* Unexported config and option structs
+
+Declare `config` as an *unexported* struct used for storing the values of optional parameters:
 
   type config struct {
     cache bool
     logger log.Logger
   }
 
-Declare an exported interface with an unexported `applyTo` method, whose purpose is to update a `config` value:
+Finally, declare an unexported `option` func type that satisfies the `Option` interface:
 
-  type Option interface {
-    applyTo(*config) error
+  type option func(*config) error
+
+  func (f *option) applyTo(cfg *config) error {
+    return f(cfg)
   }
-
-Now make the `Open` function take a variadic `...Option` parameter in addition to its mandatory parameter(s):
-
-  func Open(addr string, opts ...Option) (*Connection, error)
 
 
 
 * Implementing the different options
 
-For each option, declare an unexported struct type and an exported factory function:
-
-  type cacheOption struct{}
-
-  func (c *cacheOption) applyTo(cfg *config) error {
-    cfg.cache = true
-    return nil
-  }
+Then, for each option, declare an exported factory function:
 
   func WithCache() Option {
-    return new(cacheOption)
-  }
-
-
-
-* Implementing the different options (cont'd)
-
-For each option, declare an unexported struct type and an exported factory function:
-
-  type loggerOption log.Logger
-
-  func (l loggerOption) applyTo(cfg *config) error {
-    cfg.logger = log.Logger(l)
-    return nil
+    f := func(cfg *config) error {
+      cfg.cache = true
+      return nil
+    }
+    return option(f)
   }
 
   func WithLogger(log log.Logger) Option {
-    return loggerOption(log)
+    f := func(cfg *config) error {
+      cfg.logger = log.Logger(l)
+      return nil
+    }
+    return option(f)
   }
 
 
@@ -530,7 +535,8 @@ Finally, at the top of the `Open` function, range over the specified options and
         return nil, err
       }
     }
-    // omitted 
+    // further validation omitted
+    // happy path omitted
   }
 
 If the resulting config doesn't make sense, perhaps due to some mutually incompatible options, error out. Otherwise, proceed with the happy path.
@@ -559,47 +565,55 @@ And because the signature of `Open` doesn't change, you would only need to relea
 
 1. Open `go-course-advanced/src/funcopts` in VS Code.
 
-2. Add a factory method named `WithTimeout` that has a `time.Duration` parameter and returns an `Option`.
+2. Declare a factory function named `WithTimeout` that has a `time.Duration` parameter and returns an `Option`.
 
-3. Declare an unexported type for the new option that satisfies the `Option` interface.
+3. Make the new timeout option return a non-nil error if the specified timeout is not positive.
 
-4. Make its `applyTo` return a non-nil error if the specified timeout is not positive.
-
-5. Finally, in the call to `Open` in the `main` function, use your new timeout option.
+4. Finally, in the call to `Open` in the `main` function, use your new timeout option.
 Try a positive and then a nonpositive value.
 
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
 
-:  type timeoutOption time.Duration
 :
 :  func (t timeoutOption) applyTo(cfg *config) error {
-:    if t <= 0 {
-:      return fmt.Errorf("nonpositive timeout: %v", time.Duration(t))
-:    }
-:    cfg.timeout = time.Duration(t)
-:    return nil
 :  }
 :
 :  func WithTimeout(t time.Duration) Option {
-:    return timeoutOption(t)
+:    f := func(cfg *config) error {
+:     if t <= 0 {
+:       return fmt.Errorf("nonpositive timeout: %v", time.Duration(t))
+:      }
+:      cfg.timeout = time.Duration(t)
+:      return nil
+:    }
+:    return option(f)
 :  }
-
-
-: TODO: perhaps mention my twist for frontloading the argument validation
 
 
 
 * Alternative implementations for functional options
 
-Functional options can also be implemented in different ways.
+In [[https://commandcenter.blogspot.com/2014/01/self-referential-functions-and-design.html][Rob Pike]]'s and [[https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis][Dave Cheney]]'s favored approaches, the option type is based on a function type rather than on an interface type. [[https://github.com/uber-go/guide/blob/master/style.md#functional-options][Uber's style guide]] favors a more verbose approach that requires a dedicated struct type for each option, but clarifies that the set of options isn't extensible.
 
-In [[https://commandcenter.blogspot.com/2014/01/self-referential-functions-and-design.html][Rob Pike]]'s and [[https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis][Dave Cheney]]'s favored approaches, the option type is based on a function type rather than on an interface type.
-
-I favor a style closer to that described in [[https://github.com/uber-go/guide/blob/master/style.md#functional-options][Uber's style guide]] because, although it requires more code to declare an option, it clarifies that the set of options isn't extensible.
+I personally favor the approach described in the previous slides, as it strikes a good balance between expressiveness, conciseness, and documentability.
 
 Choose whichever style you prefer, but do learn to recognize cases where functional options would be useful.
 
-.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/sage.svg 200 _
+.image https://go.dev/blog/store/gophers.jpg 200 _
+
+
+
+* Don't use functional options on the hot path
+
+Because functional options are a useful trick to work around the absence of keyword parameters in Go, you may be tempted to use that pattern whenever you feel the need for keyword parameters:
+
+  func NewUser(opts ...Option) (*User, error) // don't do this
+
+However, functional options are less performant than a simple config struct! See [[https://www.evanjones.ca/go-functional-options-slow.html][Evan Jones - Go: Functional options are slow]].
+
+Use functional options liberally for initializing/configuring stuff (e.g. a middleware) but, if performance is critical, don't rely on them on your application's hot path.
+
+.image https://miro.medium.com/max/4800/1*-bo7H329eM0O1eL_ASBVOA.jpeg 200 _
 
 
 
@@ -940,7 +954,7 @@ For example, package `foo` cannot import package `bar` if `bar` itself imports `
 
 Imports form a _directed_acyclic_graph_, like the graph of commits in a Git repository.
 
-This design decision by the Go team is a key enabler of fast compilation.
+This design decision by the Go team is a key enabler of fast compilation and package initialization.
 
 .image https://miro.medium.com/max/4800/1*-bo7H329eM0O1eL_ASBVOA.jpeg 200 _
 
