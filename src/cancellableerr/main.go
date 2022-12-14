@@ -17,14 +17,15 @@ func main() {
 // START OMIT
 // main is unchanged
 
-func printInts(ctx context.Context) { // HL
+func printInts(ctx context.Context) error { // HL
 	for i := 0; ; i++ {
-		if ctx.Err() != nil { // HL
-			return
+		if err := ctx.Err(); err != nil { // HL
+			return err
 		}
 		fmt.Println(i)
 		time.Sleep(100 * time.Millisecond)
 	}
+	return nil
 }
 
 // END OMIT

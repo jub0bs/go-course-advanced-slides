@@ -16,11 +16,11 @@ func main() {
 // START OMIT
 // main is unchanged
 
-func printInts(ctx context.Context) {
+func printInts(ctx context.Context) error {
 	if deadline, exists := ctx.Deadline(); exists { // HL
 		estimatedTimeToCompletion := 3 * time.Second
 		if deadline.Sub(time.Now()) < estimatedTimeToCompletion { // HL
-			return
+			return context.DeadlineExceeded
 		}
 	}
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -29,12 +29,13 @@ func printInts(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			ticker.Stop()
-			return
+			return ctx.Err()
 		case <-ticker.C:
 			fmt.Println(i)
 			i++
 		}
 	}
+	return nil
 }
 
 // END OMIT

@@ -918,7 +918,7 @@ Since Go 1.13, you can check whether the error chain contains a value of that in
 
 * Use internal packages
 
-An internal package is any package whose path contains a segment named "internal".
+An [[https://go.dev/doc/go1.4#internalpackages][internal package]] is any package whose path contains a segment named "internal".
 
 It can only be imported by the parent and sibling packages. For example, a package `foo/bar/internal/baz` can only be imported by package `foo/bar` and its subpackages.
 
@@ -942,11 +942,12 @@ Internal packages are [[https://dave.cheney.net/2019/10/06/use-internal-packages
 
 4. Make the `twitter` and `github` package use the `internal.IsLongEnough` function instead of their own `isLongEnough` function (which can now be removed).
 
-5. Which packages can import `namecheck/internal`? What about 3rd-party packages?
+5. What other existing package in the project could be made a subpackage of `internal`?
 
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
 
 : step 3: add minLen as an extra param
+: stub could be in internal as well, since it's only used in twitter and github, and we don't want people to depend on it
 
 
 
@@ -1442,7 +1443,7 @@ The `context` package provides a `Context` type.
     Done() <-chan struct{}
     Err() error
     Deadline() (deadline time.Time, ok bool)
-    Value(key interface{}) interface{}
+    Value(key any) any
   }
 
 Its primary purpose is to *broadcast*a*cancellation*signal* to child goroutines.
@@ -1510,13 +1511,26 @@ Cancellation signals flow from top to bottom: cancelling a node of the context t
 
 
 
-* Designing a cancellable function
+* Designing a cancellable function/method
 
-A function that must be cancellable should accept a `Context` parameter.
+A function or a method that must be cancellable should accept a `Context` parameter.
 
-By convention, that parameter is the function's first and is named `ctx`:
+By convention, that parameter comes first and is named `ctx`:
 
   IsAvailable(ctx context.Context, username string) (bool, error)
+
+Also, a cancellable function/method whose execution is cut short should customarily return the result of `ctx.Err()`:
+
+  func Sleep(ctx context.Context, d time.Duration) error
+    timer := time.NewTimer(d)
+    defer timer.Stop()
+    select {
+      case <- ctx.Done():
+        return ctx.Err()
+      case <- timer.C:
+        return nil
+    }
+  }
 
 
 
@@ -1528,6 +1542,8 @@ Any of your functions that is
 - CPU-bound but possibly long-running (e.g. it performs some number crunching),
 
 should be cancellable.
+
+.image https://www.radiofrance.fr/s3/cruiser-production/2021/01/4a643c07-dea4-41ae-afee-b071035a636e/870x489_gettyimages-1278420063.jpg 200 _
 
 
 
@@ -1604,13 +1620,13 @@ The `context` package also provides a way of storing key-value pairs in contexts
 
 `context.WithValue` allows you to derive a new context that contains a key-value pair:
 
-  func WithValue(parent context.Context, key, val interface{}) context.Context
+  func WithValue(parent context.Context, key, val any) context.Context
 
 The value can later to retrieved via the `Value` method on the context in question or any context derived from it:
 
   type Context interface {
     // other methods omitted
-    Value(k interface{}) interface{}
+    Value(k any) any
   }
 
 
@@ -1902,6 +1918,8 @@ Any ideas?
 
 * Counting semaphore
 
+A counting [[https://en.wikipedia.org/wiki/Semaphore_(programming)][semaphore]] limits the number of concurrent accesses to a common resource.
+
 Metaphor: "Due to COVID, no more than n people allowed in the bakery at a time."
 
 Declare a buffered channel of empty structs whose capacity dictates the limit of concurrent access to the resource of interest:
@@ -1912,7 +1930,7 @@ Declare a buffered channel of empty structs whose capacity dictates the limit of
 Acquire and release a "token" before and after each access to the resource:
 
   sem <- struct{}{} // acquire a token
-  // ...            // access the resource release the token
+  // ...            // access the resource
   <-sem             // release the token
 
 Each send operation will block for as long as the channel's buffer is full!
@@ -1923,13 +1941,13 @@ Each send operation will block for as long as the channel's buffer is full!
 
 1. Open `go-course-advanced/src/namecheck` in VS Code.
 
-2. Use a semaphore to guarantee that the number of concurrent calls to the `check` function doesn't exceed some fixed number (e.g. 16).
+2. Use a semaphore to guarantee that the `IsAvailable` method is invoked by at most 16 concurrent goroutines.
 
 3. Start the server and exercise it.
 
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
 
-: remark: state at package level, but we could do it differently
+: acquire a semaphore token then release it within the `check` function
 
 
 
@@ -2084,6 +2102,18 @@ Don't abuse it, though. In particular, using a `sync.Once` to ensure a channel i
 
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
 
+: func (s *Server) Foo() http.HandlerFunc {
+: 	var msg string
+: 	var once sync.Once
+: 	ch := make(chan string)
+: 	go func() { ch <- s.initializeFoo() }()
+: 	f := func(w http.ResponseWriter, r *http.Request) {
+: 		once.Do(func() { msg = <-ch })
+: 		w.Header().Set("Content-Type", "text/plain")
+: 		fmt.Fprint(w, msg)
+: 	}
+: 	return f
+: }
 
 
 * Macro-optimization
@@ -2193,7 +2223,7 @@ For server code, you can expose `pprof` profiles through endpoints on the `/debu
 
 A blank import is the simplest way to do that:
 
-  import _ net/http/pprof
+  import _ "net/http/pprof"
 
 However, [[http://mmcloughlin.com/posts/your-pprof-is-showing][for security reasons]], don't expose this endpoint to the world on your production server!
 
@@ -2334,9 +2364,9 @@ As a result, the order of a struct's fields affects the struct's size in memory!
 
 You can visualize that layout with [[https://twitter.com/dominikhonnef][Dominik Honnef]]'s [[https://github.com/dominikh/go-tools/tree/master/cmd/structlayout][`structlayout` utilities]]:
 
-  go install honnef.co/go/tools/cmd/structlayout
-  go install honnef.co/go/tools/cmd/structlayout-pretty
-  go install honnef.co/go/tools/cmd/structlayout-optimize
+  go install honnef.co/go/tools/cmd/structlayout@latest
+  go install honnef.co/go/tools/cmd/structlayout-pretty@latest
+  go install honnef.co/go/tools/cmd/structlayout-optimize@latest
 
 One sure way of minimizing padding consists in ordering the fields of your struct in decreasing size order: largest field first, smallest field last.
 
@@ -2569,7 +2599,7 @@ As discussed before, a failure to limit the level of concurrency can cause issue
 
 If users can indirectly spawn many goroutines via a malicious request, they may be able to cause a denial of service.
 
-In such cases, avoid using the fan-out pattern. Prefer a semaphore.
+In such cases, avoid using the fan-out pattern. Prefer the pool-of-workers pattern.
 
 .image https://go.dev/blog/store/gophers.jpg 200 _
 
@@ -2647,8 +2677,8 @@ The problem is that a blank import of the `net/http/pprof` package registers the
 
 Instead, you should use a custom [[https://pkg.go.dev/net/http#ServeMux][`http.ServeMux`]].
 You can either manually register the pprof handlers on the same custom mux you use for your other normal handlers.
-TODO
-https://blog.cloudflare.com/exposing-go-on-the-internet/#servemux
+
+: https://blog.cloudflare.com/exposing-go-on-the-internet/#servemux
 This approach allows you to
 
 - either wrap the mux in some auth middleware,
@@ -2923,4 +2953,3 @@ and becomes part of the corpus.
 Good candidates include functions that parse text and have security requirements and/or are not supposed to panic.
 
 Any example from the core library?
-

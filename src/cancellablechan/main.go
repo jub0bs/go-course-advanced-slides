@@ -14,19 +14,20 @@ func main() {
 	// do more work (omitted)...
 }
 
-func printInts(ctx context.Context) { // HL
+func printInts(ctx context.Context) error { // HL
 	ticker := time.NewTicker(100 * time.Millisecond)
 	var i int
 	for {
 		select {
 		case <-ctx.Done(): // HL
 			ticker.Stop()
-			return
+			return ctx.Err()
 		case <-ticker.C:
 			fmt.Println(i)
 			i++
 		}
 	}
+	return nil
 }
 
 // END OMIT
