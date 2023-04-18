@@ -1,5 +1,5 @@
 Formation Go avancé
-12 December 2022
+18 April 2023
 
 Julien Cretel
 jcretel-infosec@protonmail.com
@@ -8,7 +8,7 @@ https://jub0bs.com
 
 * Setup
 
-- Go 1.19.x
+- Go 1.20.x
 - Visual Studio Code
 - [[https://code.visualstudio.com/docs/languages/go][Go extension for Visual Studio Code]]
 - Git
@@ -810,7 +810,7 @@ Don't systematically bubble up low-level errors to the caller:
     return err
   }
 
-Instead, return a higher-level error that "wraps" the lower-level one.
+When appropriate, return a higher-level error that "wraps" the lower-level one.
 
 The easy way is to use the `%w` format directive:
 
@@ -823,6 +823,7 @@ To provide more information, declare your own type that satisfies `error` and `w
   type error interface {
     Error() string
   }
+
   type wrapper interface {
     Unwrap() error
   }
@@ -862,29 +863,6 @@ Since [[https://go.dev/blog/go1.13-errors][Go 1.13]], you can ask wether the err
     // handle error
   }
 
-If you're only interested in the next value up the error chain, do this:
-
-  type wrapper interface { Unwrap() error }
-  if err, ok := err.(wrapper); ok { // err has a cause
-    // call err.Unwrap to access the error that caused err
-  }
-
-
-
-* Exercise: inspect the cause of an error
-
-1. Open `go-course-advanced/src/namecheck` in VS Code.
-
-2. Make `UnknownAvailabilityError` satisfy the `wrapper` interface.
-
-3. In `main`, access the cause of the error received on the channel and print it.
-
-4. To trigger an artificial error, scramble the host in the implementation of `GitHub`'s `IsAvailable` method.
-
-5. Compile and run the program.
-
-.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
-
 
 
 * Inspecting error values: asserting on behavior
@@ -909,6 +887,18 @@ Since Go 1.13, you can check whether the error chain contains a value of that in
     // call errTemp.Temporary
     // if it returns true, perhaps retry the operation that failed
   }
+
+
+
+* Multi-errors: errors composed of multiple other `error` values
+
+Function [[https://pkg.go.dev/errors#Join][`errors.Join`]] (new in Go 1.20) allows you to build multi-errors:
+
+  func Join(errs ...error) error
+
+The errors in question then form, not just a linked list, but a tree in memory!
+
+Multi-errors are useful for reporting several reasons for failure via a single `error` value. For a good use case, see [[https://twitter.com/jub0bs/status/1631343923678388225][jub0bs/fcors]].
 
 
 
@@ -1317,39 +1307,6 @@ The [[https://pkg.go.dev/golang.org/x/exp/maps][golang.org/x/exp/maps package]] 
   func Keys[M ~map[K]V, K comparable, V any](m M) []K
 
 Along with the golang.org/x/exp/constraints package, those two packages will likely be rolled in a future version.
-
-
-
-* A comparable puzzler
-
-All interface types are comparable. For instance, it's legal to do this:
-
-.play -edit src/interfaces_are_comparable.go /^//START/,/^//END/
-
-However, many interface types, including common ones like `any` and `io.Writer`,
-do _not_ satisfy the new `comparable` interface! 😕
-
-See [[https://github.com/golang/go/issues/51338][proposal: spec: permit values to have type "comparable"]].
-
-This state of affairs gives rise to surprising and disheartening limitations...
-
-
-
-* When comparable doesn't mean comparable: an example
-
-[[https://pkg.go.dev/golang.org/x/exp/maps#Values][Function `maps.Values`]] expects a map whose key type satisfies `comparable`:
-
-  func Values[M ~map[K]V, K comparable, V any](m M) []V
-
-However, because `io.Writer` interface does not implement `comparable`, passing a map whose key type is `io.Writer` to `maps.Values` is illegal:
-
-  m := map[io.Writer]int{
-    os.Stdout: 1,
-    os.Stderr: 2,
-  }
-  fmt.Println(maps.Values(m)) // compilation error
-
-See [[https://go.dev/play/p/d2PwT6lXLwS][this playground]].
 
 
 
