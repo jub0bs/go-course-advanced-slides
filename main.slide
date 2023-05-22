@@ -1,10 +1,25 @@
 Formation Go avancé
-18 April 2023
+22 May 2023
 
 Julien Cretel
 jcretel-infosec@protonmail.com
 https://jub0bs.com
 @jub0bs
+
+* Who I am
+
+- Julien Cretel (a.k.a. [[https://twitter.com/jub0bs][@jub0bs]])
+- self-employed since 2019
+- Go developer since 2017
+- Web-security researcher & consultant
+- (occasional) bug-bounty hunter
+- trainer (Go & security)
+- blogger (at [[https://jub0bs.com][jub0bs.com]])
+
+: pentests, vulnerability evaluation, code audits
+: present yourselves!
+
+
 
 * Setup
 
@@ -13,12 +28,11 @@ https://jub0bs.com
 - [[https://code.visualstudio.com/docs/languages/go][Go extension for Visual Studio Code]]
 - Git
 
+
+
 * Overview of the Namecheck project
 
-
 * Optimize your code for reading
-
-
 
 * Use constants provided by packages you import
 
@@ -866,16 +880,6 @@ Since [[https://go.dev/blog/go1.13-errors][Go 1.13]], you can ask wether the err
 
 
 * Inspecting error values: asserting on behavior
-
-A type assertion can tell you whether an error satisfies a more specific interface:
-
-  type temporary interface {
-    Temporary() bool
-  }
-  if errTemp, ok := err.(temporary); ok {
-    // call errTemp.Temporary
-    // if it returns true, perhaps retry the operation that failed
-  }
 
 Since Go 1.13, you can check whether the error chain contains a value of that interface:
 
