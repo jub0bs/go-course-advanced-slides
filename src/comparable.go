@@ -4,6 +4,9 @@ import "fmt"
 
 // START OMIT
 func Equal[E comparable](s1, s2 []E) bool { // HL
+	if len(s1) != len(s2) {
+		return false
+	}
 	for i := range s1 {
 		if s1[i] != s2[i] {
 			return false

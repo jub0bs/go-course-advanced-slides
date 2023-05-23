@@ -901,22 +901,19 @@ Since [[https://go.dev/blog/go1.13-errors][Go 1.13]], you can ask wether the err
 
 
 
-* Inspecting error values: asserting on behavior
+* Inspecting error values: looking for an error of a given type
 
-Since Go 1.13, you can check whether the error chain contains a value of that interface:
+Since Go 1.13, you can check whether the error chain contains an error of a given concrete (or abstract) type:
 
-  type temporary interface {
-    Temporary() bool
-  }
-  var errTemp temporary
-  if errors.As(err, &errTemp) {
-    // call errTemp.Temporary
-    // if it returns true, perhaps retry the operation that failed
+  err := foo()
+  var uaerr *namecheck.UnknownAvailabilityError
+  if errors.As(err, &uaerr) {
+    // access and use the fields of uaerr
   }
 
 
 
-* Multi-errors: errors composed of multiple other `error` values
+* Multi-errors: errors composed of multiple other error values
 
 Function [[https://pkg.go.dev/errors#Join][`errors.Join`]] (new in Go 1.20) allows you to build multi-errors:
 
