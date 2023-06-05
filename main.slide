@@ -425,11 +425,11 @@ Callers must also specify whether they wish to use caching and/or a logger.
 
   db.Open(addr, db.DefaultCache, zap.NewNop())
 
-  db.Open(addr, db.DefaultCache, log)
+  db.Open(addr, db.DefaultCache, logger)
 
   db.Open(addr, false, zap.NewNop())
 
-  db.Open(addr, false, log)
+  db.Open(addr, false, logger)
 
 : Remember that Go has no support for optional parameters
 
@@ -498,7 +498,7 @@ A compelling pattern known as _functional_options_ leads to a much better API:
 
   db.Open(addr, db.WithCache())
 
-  db.Open(addr, db.WithCache(), db.WithLogger(log))
+  db.Open(addr, db.WithCache(), db.WithLogger(logger))
 
 This pattern essentially allows you to simulate support for optional parameters in Go, at the cost of some complexity (albeit hidden under the hood). Let's see how it's done...
 
@@ -587,11 +587,11 @@ Then, clients of your package are free to specify only the options they need:
 
   db.Open(addr)
 
-  db.Open(addr, db.WithLogger(log))
+  db.Open(addr, db.WithLogger(logger))
 
   db.Open(addr, db.WithCache())
 
-  db.Open(addr, db.WithCache(), db.WithLogger(log))
+  db.Open(addr, db.WithCache(), db.WithLogger(logger))
 
 Moreover, you're free to add other options to your `db` package later!
 
@@ -1902,18 +1902,29 @@ A counting [[https://en.wikipedia.org/wiki/Semaphore_(programming)][semaphore]] 
 
 Metaphor: "Due to COVID, no more than n people allowed in the bakery at a time."
 
+
+
+* Counting semaphore (cont'd)
+
 Declare a buffered channel of empty structs whose capacity dictates the limit of concurrent access to the resource of interest:
 
+  type token struct{}
   const maxOutstanding = 16
-  sem := make(chan struct{}, maxOutstanding)
+  sem := make(chan token, maxOutstanding)
 
 Acquire and release a "token" before and after each access to the resource:
 
-  sem <- struct{}{} // acquire a token
-  // ...            // access the resource
-  <-sem             // release the token
+  sem <- token{} // acquire a token
+  // ...         // access the resource
+  <-sem          // release the token
 
-Each send operation will block for as long as the channel's buffer is full!
+Each send operation only proceeds when the channel's buffer is not full.
+
+No need for a wait group: at the point where you must wait for all goroutines to terminate, simply fill the channel with "dummy" tokens:
+
+  for i := 0; i < maxOutstanding; i++ {
+    sem <- token{}
+  }
 
 
 
@@ -1921,7 +1932,7 @@ Each send operation will block for as long as the channel's buffer is full!
 
 1. Open `go-course-advanced-labs/src/namecheck` in VS Code.
 
-2. Use a semaphore to guarantee that the `IsAvailable` method is invoked by at most 16 concurrent goroutines.
+2. Use a semaphore to guarantee that the `check` function is invoked by at most 16 concurrent goroutines.
 
 3. Start the server and exercise it.
 
@@ -2072,7 +2083,7 @@ Don't abuse it, though. In particular, using a `sync.Once` to ensure a channel i
 
 1. Open `go-course-advanced-labs/src/handleronce` in VS Code.
 
-2. Inspect the code. Note that the initialization of the Foo handler takes must longer than the Bar handler's.
+2. Inspect the code. Note that the initialization of the `Foo` handler takes much longer than that of the `Bar` handler.
 
 3. Compile the program and run the executable. What happens?
 
