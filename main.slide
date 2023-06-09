@@ -1,5 +1,5 @@
 Formation Go avancé
-22 May 2023
+5 June 2023
 
 Julien Cretel
 jcretel-infosec@protonmail.com
@@ -1778,7 +1778,7 @@ Leave the option to do that to your clients.
 
 * Don't assume concurrency safety
 
-None of the Go's primitives types are _concurrency-safe_.
+None of Go's primitives types are _concurrency-safe_.
 
 In general, you need to serialize access to variables in order to avoid data races.
 
@@ -1869,7 +1869,7 @@ Send work to the worker goroutine via a channel, and then close that channel:
 
 Each worker goroutine continually receives work to do until the channel gets closed:
 
-  func worker(ch <-chan Task, wg *sync.WaitGroup) {
+  func worker(tasks <-chan Task, wg *sync.WaitGroup) {
     defer wg.Done()
     for task := range tasks {
       // carry out the task
@@ -1909,20 +1909,30 @@ Metaphor: "Due to COVID, no more than n people allowed in the bakery at a time."
 Declare a buffered channel of empty structs whose capacity dictates the limit of concurrent access to the resource of interest:
 
   type token struct{}
-  const maxOutstanding = 16
-  sem := make(chan token, maxOutstanding)
+  sem := make(chan token, 16)
 
 Acquire and release a "token" before and after each access to the resource:
 
   sem <- token{} // acquire a token
-  // ...         // access the resource
-  <-sem          // release the token
-
+  go func() {
+    defer func() {<-sem}() // release the token
+    // ... 
+  }()
 Each send operation only proceeds when the channel's buffer is not full.
 
-No need for a wait group: at the point where you must wait for all goroutines to terminate, simply fill the channel with "dummy" tokens:
 
-  for i := 0; i < maxOutstanding; i++ {
+
+* Counting semaphore (cont'd)
+
+No need for a wait group for implementing a semaphore.
+
+Replace `wg.Add(1)` by `sem`<-`token{}`.
+
+Replace `wg.Done()` by `<-sem`.
+
+Replace `wg.Wait()` by a loop that fills the channel with "dummy" tokens:
+
+  for i := 0; i < cap(sem); i++ {
     sem <- token{}
   }
 
@@ -2028,7 +2038,7 @@ More about this and similar techniques for taming tail latency in [[https://www.
 
 
 
-* Quiz: is there a data race?
+* Quiz: is there a synchronization bug?
 
 Is there a data race in the following program? Why or why not?
 
@@ -2036,7 +2046,7 @@ Is there a data race in the following program? Why or why not?
 
 
 
-* Quiz: is there a data race? (cont'd)
+* Quiz: is there a synchronization bug? (cont'd)
 
 What about the following program? Why or why not?
 
@@ -2058,10 +2068,10 @@ This is useful if you already know the number of concurrent tasks to perform.
 
 `sync.Once` is a concurrency-safe abstraction for executing a most one action.
 
-For a given instance `once` of `sync.Once`,
+For a given instance `once` of type `sync.Once`,
 
 - only the first call to `once.Do(f)` will invoke function `f`, even if `f` has a different value in each invocation, and
-- `once.Do(f)` returns after `f` returns.
+- all calls to `once.Do` only return after the selected function `f` returns.
 
 .play -edit src/once/main.go /^//START/,/^//END/
 
