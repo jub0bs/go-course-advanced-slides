@@ -54,7 +54,23 @@ If you need to add a line break somewhere, make sure [[https://github.com/golang
 
 * Overview of the Namecheck project
 
+A small CLI tool (and then a server) to check the validity and availability
+of a username on multiple social networks: Twitter, GitHub, etc.
+
+*Business*case*
+
+- Ability to choose a name consistent across multiple platforms 😇
+- [[https://en.wikipedia.org/wiki/Cybersquatting#Social_media][Username squatting]] 😈
+
+.image https://raw.githubusercontent.com/nielsing/yar/master/images/yargopher3.png 150 _
+
+: mention Newsweaver's rebranding to Poppulo, missed claiming @Poppulo on Twitter
+
+
+
 * Optimize your code for reading
+
+
 
 * Use constants provided by packages you import
 
