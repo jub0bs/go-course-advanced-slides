@@ -11,8 +11,7 @@ func main() {
 
 // START OMIT
 func foo() {
-	c := time.Tick(500 * time.Millisecond)
-	for v := range c {
+	for v := range time.Tick(500 * time.Millisecond) { // HL
 		fmt.Println(v)
 	}
 }

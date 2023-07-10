@@ -1102,7 +1102,7 @@ Note that the implementation of the `Size` method would be identical!
     if t == nil {
       return 0
     }
-    return 1 + Size(t.Left) + Size(t.Right)
+    return 1 + t.Left.Size() + t.Right.Size()
   }
 
 Alternatively, you could generate different specializations of your binary tree (one for `int`, one for `string`, etc.) but that requires a pre-compilation step in your build...
@@ -1662,7 +1662,7 @@ Context values let you smuggle anything in a function without changing its signa
 
 Don't take this as a license to avoid proper dependency inversion!
 
-Context values should inform, not control the logic:
+Context values be immutable. Moreover, they should inform, not control, the logic:
 
 - Good candidates: metrics, trace ID, auth token
 
@@ -1761,7 +1761,7 @@ Why does this program deadlock?
 
 .play -edit src/tick/main.go /^//START/,/^//END/
 
-Unfortunately, `time.Tick` always leaks a goroutine. Use a `time.Ticker` instead:
+Unfortunately, `time.Tick` always leaks a goroutine. Use a [[https://pkg.go.dev/time#Ticker][`time.Ticker`]] instead:
 
 .play -edit src/ticker/main.go /^//START/,/^//END/
 
@@ -1769,11 +1769,15 @@ Unfortunately, `time.Tick` always leaks a goroutine. Use a `time.Ticker` instead
 
 
 
-* Avoid time.After
+* Similarly, avoid time.After
 
-Similarly, under the hood, `time.After` launches a goroutine that only terminates after the specified duration.
+[[https://pkg.go.dev/time#After][`time.After`]] starts a goroutine that only terminates after the specified duration.
 
-Instead, favor the use of a `time.Timer` to terminate the goroutine as soon as possible.
+.play -edit src/after/main.go /^//START/,/^//END/
+
+Instead, use a [[https://pkg.go.dev/time#Timer][`time.Timer`]] to terminate the underlying goroutine a.s.a.p.:
+
+.play -edit src/timer/main.go /^//START/,/^//END/
 
 : goroutine alive for longer than needed
 
@@ -2216,7 +2220,7 @@ If you're not familiar with flame graphs and don't know how to interpret them, r
 
 1. Clone `https://github.com/tomnomnom/anew` and open it in VS Code.
 
-2. Read the README and `main.go`. Run the program on simple input.
+2. Read the README and `main.go`. Run the program (with flag `-d`) on simple input.
 
 3. Time its execution on a large input file with the `time` utility.
 
@@ -2319,11 +2323,9 @@ See [[https://blog.gopheracademy.com/advent-2017/go-execution-tracer/][André Ca
 
 2. Time run the program; inspect the image file it creates.
 
-3. Profile it with `pprof`. Can you glean any valuable info from the report?
+3. Trace the program's execution. Suggest changes for improving performance.
 
-4. Trace the program's execution. Suggest changes for improving performance.
-
-5. Validate your changes after each improvement.
+4. Validate your changes after each improvement.
 
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
 

@@ -16,15 +16,16 @@ func main() {
 }
 
 // START OMIT
-func foo(ctx context.Context) {
-	ticker := time.NewTicker(500 * time.Millisecond)
+func foo(ctx context.Context) error {
+	ticker := time.NewTicker(500 * time.Millisecond) // HL
 	for {
 		select {
 		case <-ctx.Done():
 			ticker.Stop() // HL
-			return
-		case v := <-ticker.C:
+			return ctx.Err()
+		case v := <-ticker.C: // HL
 			fmt.Println(v)
+			return nil
 		}
 	}
 }
