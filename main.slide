@@ -830,18 +830,37 @@ See [[https://www.youtube.com/watch?v=yeetIgNeIkc][Mat Ryer - Idiomatic Go Trick
 
 
 
-* Advanced error handling
+* Advanced error handling TODO
+
+* Errors are values
+
+https://go.dev/blog/errors-are-values
+https://www.youtube.com/watch?v=PAAkCSZUG1c&t=973s
 
 
 * Bad error-handling practices
 
+TODO: split the following into multiple slides
+
 - ignoring errors indiscriminately
 - handling (e.g. logging) then returning an error
-- simply concatenating error messages
-- parsing error messages to access contextual information programmatically
-- calling `os.Exit` or `log.Fatal` deep within your program
-- panicking willy-nilly
-- [[https://go.dev/play/p/WmGrIUbUdmb][recovering from panics]] indiscriminately
+
+* panicking willy-nilly: TODO
+
+but use panic where appropriate: see twitter package with MustCompile
+
+- Errors are not for handling of programmer mistakes
+	- https://github.com/golang/go/discussions/47203#discussioncomment-1038541
+	- don't use errors when a panic is appropriate
+	- An out-of-bounds access is clearly a programmer mistake, just like division by zero, a nil pointer dereference
+	- or misusing an API, like passing nil as a context.Context argument
+
+sometimes hard to draw the line between error and panic... use your best judgement
+
+
+* Recovering from panics indiscriminately
+
+[[https://go.dev/play/p/WmGrIUbUdmb][recovering from panics]] indiscriminately
 
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/science/gas-mask.svg 200 _
 
@@ -853,8 +872,79 @@ See [[https://www.youtube.com/watch?v=yeetIgNeIkc][Mat Ryer - Idiomatic Go Trick
 : recover: you cannot be sure whether the programme is in a valid state
 
 
+* Don't call `os.Exit` or `log.Fatal` deep within your program
+
+- also log.Fatal and variants
+- abruptly ends the programme
+-  [] https://stackoverflow.com/questions/27629380/how-to-exit-a-go-program-honoring-deferred-calls#comment43679724_27629493
+- deferred calls are not honoured
+	- https://changelog.com/gotime/165#transcript-35
+- https://changelog.com/gotime/165#transcript-42
+- => run function returning an error helps in being disciplined about that
+	- https://changelog.com/gotime/165#transcript-107
+
+
+* Custom errors
+
+TODO: distinguish building error values and exporting them
+
+Q: should you even? When?
+- when you need an error value and you don't have one at the ready (see IsAvailable in some switch case)
+- message with right level of abstraction
+- 
+
+specific sentinel error values
+
+or custom error types
+
+
+* Sentinel error values TODO
+
+package var: easy to misuse by updating it
+
+constant errors Dave Cheney, but not happy with it
+
+instead, use a top-level function that returns the unexported sentinel value
+
+naming convention: Err prefix
+https://pkg.go.dev/net/http#ErrUseLastResponse
+exceptions: io.EOF, context.Canceled
+
+see Kevlin Henney's talk about naming: https://www.youtube.com/watch?v=ZsHMHukIlJY&t=28m50s
+
+
+
+* Custom error types
+
+reminder about error interface
+- for custom error types, pointer receiver is more common (TODO: check in Go's codebase and stdlib)
+	- https://go.dev/blog/go1.13-errors
+
+naming convention Error suffix
+json.UnmarshalTypeError
+
+
+
+
+* Adding contextual information to an error TODO
+:TODO: be more pedestrian about this explanation. explain that you may want to add contextual information
+
+- simply concatenating error messages
+- parsing error messages to access contextual information programmatically
+
+avoid depending on precise wording of an error message coming from a third-party library
+
+- never programmatically inspect the output of Error()
+	- https://www.youtube.com/watch?v=lsBF58Q-DnY&t=5m35s
+	- see also Effective Java
+	- brittle!
+	- inefficient
+
+  if string.Contains(err.Error(), "not exists") { ... }
+
 
 * Report errors appropriate to the level of abstraction
+
 
 Don't systematically bubble up low-level errors to the caller:
 
@@ -870,11 +960,22 @@ The easy way is to use the `%w` format directive:
       return fmt.Errorf("failure to check username availability: %w", err)
   }
 
+see https://go.dev/blog/go1.13-errors#wrapping-errors-with-w
+
+
+* new slide
+
 To provide more information, declare your own type that satisfies `error` and `wrapper`:
 
   type error interface {
     Error() string
   }
+
+: convention rather than a change: an error which contains another may implement an Unwrap method returning the underlying error
+
+: The errors package also includes a new Unwrap function which returns the result of calling an error’s Unwrap method, or nil when the error has no Unwrap method. It is usually better to use errors.Is or errors.As, however, since these functions will examine the entire chain in a single call.
+
+mention https://pkg.go.dev/errors#Unwrap
 
   type wrapper interface {
     Unwrap() error
@@ -899,49 +1000,86 @@ To provide more information, declare your own type that satisfies `error` and `w
 
 
 
-* Inspecting error values: comparison with sentinel errors
+* Aggregating errors into multi-errors
 
-Don't stop at `err`!=`nil`. [[https://www.youtube.com/watch?v=PAAkCSZUG1c&t=17m27s][Don't just check errors; handle them gracefully]].
+[[https://pkg.go.dev/errors#Join][Function `errors.Join`]] allows you to aggregate multiple errors into one `error` value:
+
+  func Join(errs ...error) error
+
+Errors then form, not simply a linked list, but a tree in memory!
+
+Functions `errors.Is` and `errors.As` perform a pre-order traversal of the error tree.
+
+: TODO: add a diagram showing a tree with calls to Join, fmt.Errorf, etc.
+
+Multi-errors are useful for reporting several reasons for failure via a single `error` value. For a good use case, see [[https://twitter.com/jub0bs/status/1631343923678388225][jub0bs/fcors]].
+
+: TODO: another advantage of multi-errors: can simplify error handling for client code
+
+: TODO addd gophers brick image
+
+
+
+* Examining errors
+
+don't rely on it too much for logic, because traversing that error tree can cause performance issues
+
+TODO: since [[https://go.dev/blog/go1.13-errors][Go 1.13]] and 1.20, improved error handling
+Querying the error tree: don't stop at err != nil TODO
+[[https://www.youtube.com/watch?v=PAAkCSZUG1c&t=17m27s][Don't just check errors; handle them gracefully]].
+
+
+* Checking whether the error chain contains a sentinel error value TODO
 
 You can compare an error to a specific sentinel error value:
 
-  if err != io.EOF {
+  if err != context.Canceled {
     // handle error
   }
 
-Since [[https://go.dev/blog/go1.13-errors][Go 1.13]], you can ask wether the error chain contains the error value of interest:
+The errors.Is function compares an error to a value.
 
-  if errors.Is(err, io.EOF) {
+TODO: misnamed... should have been named "Contains"
+
+Moreover, you can use [[https://pkg.go.dev/errors#Is][function `errors.Is`]] to check whether the error chain contains a specific `error` value of interest to you:
+
+  if errors.Is(err, context.Canceled) {
     // handle error
   }
 
 
 
-* Inspecting error values: looking for an error of a given type
+* Checking whether the error chain contains a specific type TODO
 
-Since Go 1.13, you can check whether the error chain contains an error of a given concrete (or abstract) type:
+Use [[https://pkg.go.dev/errors#As][function `errors.As`]]. Its second argument must be a non-nil pointer to some variable; that variable's type must be either a concrete type that implements `error`...
+
+The As function tests whether an error is a specific type.
+
+TODO: misnamed... should have been named ...?
 
   err := foo()
   var uaerr *namecheck.UnknownAvailabilityError
   if errors.As(err, &uaerr) {
-    // access and use the fields of uaerr
+    // you can now access and use the fields of variable uaerr
   }
 
+\... or any interface type:
+
+  err := foo()
+  var temp interface { Temporary() bool }
+  if errors.As(err, &temp) && temp.Temporary() {
+    // since the error is of a temporary nature, you could retry calling foo
+  }
+
+: since Go 1.13
+: TODO: add note about asserting on behavior
 
 
-* Multi-errors: errors composed of multiple other error values
-
-Function [[https://pkg.go.dev/errors#Join][`errors.Join`]] (new in Go 1.20) allows you to build multi-errors:
-
-  func Join(errs ...error) error
-
-The errors in question then form, not just a linked list, but a tree in memory!
-
-Multi-errors are useful for reporting several reasons for failure via a single `error` value. For a good use case, see [[https://twitter.com/jub0bs/status/1631343923678388225][jub0bs/fcors]].
 
 
 
-* Organizing packages
+
+* Project structure
 
 
 
@@ -1720,18 +1858,6 @@ Familiarize yourself with [[https://en.wikipedia.org/wiki/Amdahl%27s_law][Amdahl
 Keep readability in mind: a concurrent programme must be understandable. Use proven and tested concurrency patterns.
 
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/sage.svg 200 _
-
-
-
-* Channel capacity often affects correctness
-
-Why does this program deadlock?
-
-.play -edit src/deadlockchan/main.go /^//START/,/^//END/
-
-.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/dandy/umbrella.svg 200 _
-
-: buffered channel of 1 vs. unbuffered channel
 
 
 
