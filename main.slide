@@ -407,7 +407,7 @@ Imagine you're developing a package named `db` that exports a function named `Op
   func Open(
     addr string,
     cache bool,
-    logger log.Logger,
+    logger *log.Logger,
   ) (*Connection, error)
 
 An address must always be specified.
@@ -421,7 +421,7 @@ Callers must also specify whether they wish to use caching and/or a logger.
   func Open(
     addr string,
     cache bool,
-    logger log.Logger,
+    logger *log.Logger,
   ) (*Connection, error)
 
 *It's*not*expressive.* Callers have no way to tell which parameters are optional.
@@ -434,7 +434,7 @@ Callers must also specify whether they wish to use caching and/or a logger.
   func Open(
     addr string,
     cache bool,
-    logger log.Logger,
+    logger *log.Logger,
   ) (*Connection, error)
 
 *It's*cumbersome.* In Go, callers of a function must provide one argument per parameter. Therefore, callers of your `Open` function who don't need caching and/or logging are forced to pass no-op arguments just to keep the compiler happy:
@@ -456,7 +456,7 @@ Callers must also specify whether they wish to use caching and/or a logger.
   func Open(
     addr string,
     cache bool,
-    logger log.Logger,
+    logger *log.Logger,
   ) (*Connection, error)
 
 *It's*hard*to*evolve.* For instance, if you're using [[https://semver.org/][semver]], adding a parameter to the `Open` function would require the release of a new major version of your library:
@@ -464,7 +464,7 @@ Callers must also specify whether they wish to use caching and/or a logger.
   func Open(
     addr string,
     cache bool,
-    logger log.Logger,
+    logger *log.Logger,
     timeout time.Duration,
   ) (*Connection, error)
 
@@ -478,9 +478,9 @@ One solution is to provide multiple variants of the `Open` function, one for eac
 
   func OpenWithCaching(addr string) (*Connection, error)
 
-  func OpenWithLogger(addr string, logger log.Logger) (*Connection, error)
+  func OpenWithLogger(addr string, logger *log.Logger) (*Connection, error)
 
-  func OpenWithCachingAndLogger(addr string, logger log.Logger) (*Connection, error)
+  func OpenWithCachingAndLogger(addr string, logger *log.Logger) (*Connection, error)
 
 However, the resulting API becomes overwhelmingly complex as the number of combinations grows...
 
@@ -493,7 +493,7 @@ Another solution consists in gathering all the configuration in a struct type an
   type Config struct {
     Addr    string
     Caching bool
-    Logger  log.Logger
+    Logger  *log.Logger
   }
 
   func Open(config Config) (*Connection, error)
@@ -542,7 +542,7 @@ Declare `config` as an *unexported* struct type used for storing the values of o
 
   type config struct {
     cache bool
-    logger log.Logger
+    logger *log.Logger
   }
 
 Finally, declare an unexported `option` func type that satisfies the `Option` interface:
@@ -567,7 +567,7 @@ Then, for each option, declare an exported factory function:
     return option(f)
   }
 
-  func WithLogger(logger log.Logger) Option {
+  func WithLogger(logger *log.Logger) Option {
     f := func(cfg *config) error {
       cfg.logger = logger
       return nil
@@ -830,27 +830,92 @@ See [[https://www.youtube.com/watch?v=yeetIgNeIkc][Mat Ryer - Idiomatic Go Trick
 
 
 
-* Advanced error handling
-
-
 * Bad error-handling practices
 
-- ignoring errors indiscriminately
-- handling (e.g. logging) then returning an error
+
+
+* Indiscriminately ignoring errors
+
+You simply cannot assume success of a fallible function and the soundness of its other results (if any) if you don't check the error it returns!
+
+Few errors should be ignored. A rare example of a fallible function whose error result can be ignored is `fmt.Println`.
+
+Rely on `errcheck` to figure out where in your code you're unduly ignoring errors.
+
+Go forces you to think about failure cases. Error handling in Go can be perceived as repetitive and tedious, but that's actually [[https://changelog.com/gotime/16#transcript-68][a strength of the language]]. Many software outages [[https://yonglezh-purdue.github.io/files/osdi14-simpletesting.pdf][can indeed be attributed]] to improper error handling.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/friends/heart-hug.svg 200 _
+
+: for some functions, a non-nil error may indicate only a partial failure (e.g. Read)
+: just restart the container? what if you have long-running jobs (e.g. billing)? that would add latency to your system
+
+
+
+* Consuming and also returning an error
+
+However you choose to handle an error value, do _not_ both consume it and report it!
+
+  func foo() error {
+    v, err := fallibleFunction()
+    if err != nil {
+      log.Println(err) // bad!
+      return err       // bad!
+    }
+    // do something interesting with v
+  }
+
+Either consume it or return it to the caller, but not both. Why not? Discuss.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/knight.svg 200 _
+
+: I've seen people logging the error at every stage of the call stack! => duplicate entries in logs, confusing
+
+
+
+* TODO
+
 - simply concatenating error messages
 - parsing error messages to access contextual information programmatically
 - calling `os.Exit` or `log.Fatal` deep within your program
-- panicking willy-nilly
-- [[https://go.dev/play/p/WmGrIUbUdmb][recovering from panics]] indiscriminately
 
-.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/science/gas-mask.svg 200 _
-
-: source of bugs, mention errcheck
-: e.g. if you log an error, don't bubble it up
 : concat (advocated in gopl): forces your clients to parse your error messages.
 : os.Exit doesn't honor deferred calls
-: panicking willy-nilly: errors are values
-: recover: you cannot be sure whether the programme is in a valid state
+
+
+
+* Panicking for no good reason
+
+A panic typically indicates a programming error or some a fatal failure. Do not panic in your functions for anticipated and mundane failures:
+
+- a file couldn't be opened
+- a HTTP request failed
+- the connection to the database dropped
+
+In idiomatic Go, such failures are instead reported to the caller as `error` values.
+
+However, panicking during the initialization of your package is legitimate, if some programming error renders the package unusable.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/sage.svg 150 _
+
+: See for example the use of `regexp.MustCompile` in package `twitter` and `github`.
+
+
+
+* Indiscrimately recovering from panics
+
+Go provides a builtin named `recover`, which from panics:
+
+.play -edit src/recover.go /^//START/,/^//END/
+
+However, you should be careful about which panics you recover from, as the program may no longer be in a valid state after recovery.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/science/gas-mask.svg 150 _
+
+: Unfortunately, some poorly designed libraries panic more often than they should and force their dependents to rely on `recover`. Have you come across such libraries?
+
+
+
+* Advanced error handling
 
 
 
