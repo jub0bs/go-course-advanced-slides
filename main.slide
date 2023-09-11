@@ -615,7 +615,7 @@ And because the signature of `Open` doesn't change, you would only need to relea
 
 
 
-* Exercise: add timeout option
+* Exercise: add a timeout option
 
 1. Open `go-course-advanced-labs/src/funcopts` in VS Code.
 
@@ -647,9 +647,11 @@ Try a positive and then a nonpositive value.
 
 * Alternative implementations for functional options
 
-In [[https://commandcenter.blogspot.com/2014/01/self-referential-functions-and-design.html][Rob Pike]]'s and [[https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis][Dave Cheney]]'s favored approaches, the option type is based on a function type rather than on an interface type. [[https://github.com/uber-go/guide/blob/master/style.md#functional-options][Uber's style guide]] favors a more verbose approach that requires a dedicated struct type for each option, but clarifies that the set of options isn't extensible.
+Different people implement functional options in different ways. Compare [[https://commandcenter.blogspot.com/2014/01/self-referential-functions-and-design.html][Rob Pike's]], [[https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis][Dave Cheney's]] and [[https://github.com/uber-go/guide/blob/master/style.md#functional-options][Uber's]] prefered approaches.
 
 I personally favor the approach described in the previous slides, as it strikes a good balance between expressiveness, conciseness, and documentability.
+
+For more on this topic, watch [[https://www.youtube.com/watch?v=5uM6z7RnReE][the talk I gave at GopherCon Europe 2023]].
 
 Choose whichever style you prefer, but do learn to recognize cases where functional options would be useful.
 
