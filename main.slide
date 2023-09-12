@@ -139,23 +139,33 @@ Resources:
 
 
 
-* API design
-
-
-* What is a good API?
-
-A good API
-
-- is easy to use but [[https://www.youtube.com/watch?v=aAb7hSCtvGw&t=6m][hard to misuse]],
-- meets its current requirements but is flexible enough to meet anticipated future requirements.
-
-Here are some general principles and specific techniques for designing good APIs in Go.
-
-.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/friends/stovepipe-hat.svg 200 _
+* General tips for library design
 
 
 
-* Encapsulate your types judiciously
+* Easy to use & hard to misuse
+
+A good library is not only easy to use but also [[https://www.youtube.com/watch?v=aAb7hSCtvGw&t=6m][hard to misuse]]. (Joshua Bloch)
+
+This maxim is particularly important if the library deals with security-critical features.
+
+.image img/bent_barrel.svg 300 _
+
+
+
+* Deep is better than shallow
+
+Minimize the _conceptual_surface_area_ of your API; maximise its power-to-weight ratio.
+
+In [[https://web.stanford.edu/~ouster/cgi-bin/book.php][John Ousterhout's words]], _deep_ libraries are better than _shallow_ ones. For example, out of two libraries that have feature parity, favor the one that exports fewer symbols:
+
+.image img/ousterhout_i0voOKwpho8vPk4pPE0cS,tDUsuHSXBUNKvIW-H3JoXw.svg 300 _
+
+This principle also applies to struct fields...
+
+
+
+* Encapsulation & information hiding
 
 Well-encapsulated types are harder to misuse and easier to evolve over time.
 
@@ -293,7 +303,7 @@ Approaches to making a type's zero value useful vary.
 
 Sometimes, you can simply modify the type's structure.
 
-In most cases, you need to lazily initializing fields within methods on that type.
+In most cases, you need to lazily initialize fields within methods on that type.
 
 
 
@@ -303,7 +313,9 @@ In most cases, you need to lazily initializing fields within methods on that typ
 
 2. Is `Bimap`'s zero value usable?
 
-3. If not, make it usable and get rid of factory function `New`.
+3. If not, make it usable.
+
+4. Get rid of factory function `New`, which is now superfluous.
 
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
 
