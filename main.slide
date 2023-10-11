@@ -1,5 +1,5 @@
 Formation Go avancé
-5 June 2023
+9 October 2023
 
 Julien Cretel
 jcretel-infosec@protonmail.com
@@ -45,7 +45,7 @@ If you need to add a line break somewhere, make sure [[https://github.com/golang
 
 * Setup
 
-- Go 1.20.x
+- Go 1.21.x
 - Visual Studio Code
 - [[https://code.visualstudio.com/docs/languages/go][Go extension for Visual Studio Code]]
 - Git
@@ -179,13 +179,15 @@ For designing a type that provides behaviors and needs to maintain _invariants_,
 
 * Encapsulate your types judiciously (cont'd)
 
-If instantiating your type requires some configuration, export _factory_function(s)_ for it.
-
 An example from the `regexp` package:
 
   type Regexp struct {
       // contains filtered or unexported fields
   }
+
+  func (*Regexp) MatchString(
+
+If instantiating your type requires some configuration, export _factory_function(s)_ for it:
 
   func Compile(expr string) (*Regexp, error)
 
@@ -840,6 +842,14 @@ This pattern can be generalized to multiple-method interfaces by using, instead 
     get func(string) (*http.Response, error)
   }
 
+  func (c *stubClient) Do(r *http.Request) (*http.Response, error) {
+    return c.do(r)
+  }
+
+  func (c *stubClient)  Get(url string) (*http.Response, error)
+    return c.get(url)
+  }
+
 See [[https://www.youtube.com/watch?v=yeetIgNeIkc][Mat Ryer - Idiomatic Go Tricks (Golang UK 2016)]] (esp. at [[https://www.youtube.com/watch?v=yeetIgNeIkc&t=8m20s][8'20'']] and [[https://www.youtube.com/watch?v=yeetIgNeIkc&t=16m40s][16'40'']])
 
 
@@ -1396,7 +1406,7 @@ For instance, given the following type declaration,
 
 the following function isn't valid syntax:
 
-  func (Slice[T]) Map[U any](func(T) U) []U
+  func (Slice[T]) Map[U any](func(T) U) Slice[U]
 
 Again, you'd have to declare `Map` as a function rather than as a method:
 
@@ -1681,11 +1691,35 @@ The only legitimate use case for storing a context in a struct is when you need 
 
 3. In `cmd/server/main.go`, pass that context to `IsAvailable`.
 
-4. Start the server.
+4. Start the server, exercise the `check` endpoint with `curl` and quickly press `^C`:
 
-5. Exercise the `check` endpoint in your browser and quickly close your browser tab.
+  curl -v http://localhost:8080/check?username=toto
+  ^C
+
+Notice that, as a result, the handler invocation itself was terminated prematurely.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 150 _
+
+
+
+* Exercise: debug this ping-pong game
+
+1. Open [[https://go.dev/play/p/n7XQ_TdOY4t][this Playground]]. It models a ping-pong game adapted from ([[https://go.dev/talks/2013/advconc.slide#6][a talk by Sameer Ajmani]]).
+
+2. The game ends with a deadlock. Can you see why?
+
+3. Discuss and fix the programme.
+
+Two solutions ([[https://go.dev/play/p/xi2-SMe3xyW][1]] and [[https://go.dev/play/p/yblNr3B5yg7][2]]) are available on the Playground.
 
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+: two goroutines exchanging one value over and over
+: pointer element to reduce memory footprint
+: show that deadlock if you never throw the ball on the table
+: one player terminates while the other is left holding the ball
+: one possibility: buffer size of 1, but no guarantee that the same player will play twice in a row
+: non-blocking send by adding a select statement
 
 
 
@@ -1802,38 +1836,6 @@ Keep readability in mind: a concurrent programme must be understandable. Use pro
 
 
 
-* Channel capacity often affects correctness
-
-Why does this program deadlock?
-
-.play -edit src/deadlockchan/main.go /^//START/,/^//END/
-
-.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/dandy/umbrella.svg 200 _
-
-: buffered channel of 1 vs. unbuffered channel
-
-
-
-* Exercise: debug this ping-pong game
-
-1. Open [[https://go.dev/play/p/n7XQ_TdOY4t][this Playground]]. It models a ping-pong game adapted from ([[https://go.dev/talks/2013/advconc.slide#6][a talk by Sameer Ajmani]]).
-
-2. The game ends with a deadlock. Can you see why?
-
-3. Discuss and fix the programme.
-
-.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
-
-: two goroutines exchanging one value over and over
-: pointer element to reduce memory footprint
-: show that deadlock if you never throw the ball on the table
-: one player terminates while the other is left holding the ball
-: one possibility: buffer size of 1, but no guarantee that the same player will play twice in a row
-: non-blocking send by adding a select statement
-: solution: https://go.dev/play/p/mollK937Rzo
-
-
-
 * Avoid time.Tick
 
 `time.Tick` is a [[https://pkg.go.dev/time/#Tick][convenient function]] for perfoming some work at regular intervals:
@@ -1923,9 +1925,9 @@ Scatter/gather is implemented in the CLI and in an earlier version of the server
 
 
 
-* Limitations of the fan-out pattern
+* Limitations of the scatter-gather pattern
 
-Unfortunately, fan out suffers from one big problem: unbounded concurrency.
+Unfortunately, scatter-gather suffers from one big problem: unbounded concurrency.
 
 If there are many jobs and handling each job takes a long time, we might start too many goroutines at once, which may end up consuming a prohibitive amount of resources!
 
@@ -2697,7 +2699,7 @@ As discussed before, a failure to limit the level of concurrency can cause issue
 
 If users can indirectly spawn many goroutines via a malicious request, they may be able to cause a denial of service.
 
-In such cases, avoid using the fan-out pattern. Prefer the pool-of-workers pattern.
+In such cases, avoid using the scatter-gather pattern. Prefer the pool-of-workers pattern.
 
 .image https://go.dev/blog/store/gophers.jpg 200 _
 
