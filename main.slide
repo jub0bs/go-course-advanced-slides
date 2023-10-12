@@ -542,10 +542,10 @@ Make the `Open` function take a variadic `...Option` parameter in addition to it
 
   func Open(addr string, opts ...Option) (*Connection, error)
 
-Declare `Option` as an *exported* interface with an *unexported* `applyTo` method, whose purpose is to update a value of some type named `config`:
+Declare `Option` as an *exported* interface with an *unexported* `apply` method, whose purpose is to update a value of some type named `config`:
 
   type Option interface {
-    applyTo(*config) error
+    apply(*config) error
   }
 
 
@@ -563,7 +563,7 @@ Finally, declare an unexported `option` func type that satisfies the `Option` in
 
   type option func(*config) error
 
-  func (f option) applyTo(cfg *config) error {
+  func (f option) apply(cfg *config) error {
     return f(cfg)
   }
 
@@ -598,7 +598,7 @@ Finally, at the top of the `Open` function, range over the specified options and
   func Open(addr string, opts ...Option) (*Connection, error) {
     var cfg config
     for _, o := range opts {
-      err := o.applyTo(&cfg)
+      err := o.apply(&cfg)
       if err != nil {
         return nil, err
       }
@@ -635,7 +635,7 @@ And because the signature of `Open` doesn't change, you would only need to relea
 
 2. Declare a factory function named `WithTimeout` that has a `time.Duration` parameter and returns an `Option`.
 
-3. Make the `applyTo` methods of your new option return a non-nil error if the specified `time.Duration` value is not positive.
+3. Make the `apply` methods of your new option return a non-nil error if the specified `time.Duration` value is not positive.
 
 4. Finally, in the call to `Open` in the `main` function, use your new timeout option.
 Try a positive and then a nonpositive value.
@@ -643,7 +643,7 @@ Try a positive and then a nonpositive value.
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
 
 :
-:  func (t timeoutOption) applyTo(cfg *config) error {
+:  func (t timeoutOption) apply(cfg *config) error {
 :  }
 :
 :  func WithTimeout(t time.Duration) Option {
