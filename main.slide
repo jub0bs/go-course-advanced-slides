@@ -200,7 +200,7 @@ If instantiating your type requires some configuration, export _factory_function
 A bidirectional map, i.e. an associative data structure in which the key-value pairs
 form a one-to-one correspondence.
 
-1. Open `go-course-advanced-labs/src/bidirectionalmap` in VS Code.
+1. Open `go-course-advanced-labs/bidirectionalmap` in VS Code.
 
 2. `Bimap` implements a bidirectional map from strings to strings with O(1) access.
 
@@ -311,7 +311,7 @@ In most cases, you need to lazily initialize fields within methods on that type.
 
 * Exercise: make Bimap's zero value readily usable
 
-1. Re-open `go-course-advanced-labs/src/bidirectionalmap` in VS Code.
+1. Re-open `go-course-advanced-labs/bidirectionalmap` in VS Code.
 
 2. Describe `Bimap`'s zero value.
 
@@ -631,7 +631,7 @@ And because the signature of `Open` doesn't change, you would only need to relea
 
 * Exercise: add a timeout option
 
-1. Open `go-course-advanced-labs/src/funcopts` in VS Code.
+1. Open `go-course-advanced-labs/funcopts` in VS Code.
 
 2. Declare a factory function named `WithTimeout` that has a `time.Duration` parameter and returns an `Option`.
 
@@ -713,7 +713,7 @@ You can also write [[https://go.dev/blog/examples][executable examples]], which 
 
 * Exercise: document the twitter package
 
-1. Open `go-course-advanced-labs/src/namecheck` in VS Code.
+1. Open `go-course-advanced-labs/namecheck` in VS Code.
 
 2. Write a short doc comment for the package at the top of `twitter/twitter.go`.
 
@@ -758,7 +758,7 @@ you can gather those test cases under a single test function and run them as _su
 
 * Exercise: switch to table-driven subtests for twitter's IsValid method
 
-1. Open `go-course-advanced-labs/src/namecheck` in VS Code.
+1. Open `go-course-advanced-labs/namecheck` in VS Code.
 
 2. Coalesce the multiple test functions for `IsValid` into a single test function that uses table-driven subtests.
 
@@ -814,7 +814,7 @@ For convenience, you can also declare factory functions for your test-double typ
 
 * Exercise: write unit tests for IsAvailable
 
-1. Open `go-course-advanced-labs/src/namecheck` in VS Code.
+1. Open `go-course-advanced-labs/namecheck` in VS Code.
 
 2. Study the `stub` package carefully.
 
@@ -976,7 +976,7 @@ To provide more information, declare your own type that satisfies `error` and `w
 
 * Exercise: define a high-level error for IsAvailable
 
-1. Open `go-course-advanced-labs/src/namecheck` in VS Code.
+1. Open `go-course-advanced-labs/namecheck` in VS Code.
 
 2. Export a struct type from package `namecheck` that represents a failure to check the availability of a username; it should provide some context about the failure (username, platform, underlying cause).
 
@@ -1052,7 +1052,7 @@ Internal packages are [[https://dave.cheney.net/2019/10/06/use-internal-packages
 
 * Exercise: put common implementation details in an internal package
 
-1. Open `go-course-advanced-labs/src/namecheck` in VS Code.
+1. Open `go-course-advanced-labs/namecheck` in VS Code.
 
 2. Notice some code duplication between the `twitter` and `github` package.
 
@@ -1634,7 +1634,7 @@ should be cancellable.
 
 * Exercise: make IsAvailable cancellable
 
-1. Open `go-course-advanced-labs/src/namecheck` in VS Code.
+1. Open `go-course-advanced-labs/namecheck` in VS Code.
 
 2. Modify the signature of `namecheck.Availabler`'s method so that it also accept a `Context` parameter.
 
@@ -1685,7 +1685,7 @@ The only legitimate use case for storing a context in a struct is when you need 
 
 * Exercise: cancel IsAvailable if the request gets canceled
 
-1. Open `go-course-advanced-labs/src/namecheck` in VS Code.
+1. Open `go-course-advanced-labs/namecheck` in VS Code.
 
 2. Consult the `net/http` doc to figure out how to extract a context from a HTTP request inside a handler.
 
@@ -2047,7 +2047,7 @@ Replace `wg.Wait()` by a loop that fills the channel with "dummy" tokens:
 
 * Namecheck project: use a semaphore
 
-1. Open `go-course-advanced-labs/src/namecheck` in VS Code.
+1. Open `go-course-advanced-labs/namecheck` in VS Code.
 
 2. Use a semaphore to guarantee that the `check` function is invoked by at most 16 concurrent goroutines.
 
@@ -2073,7 +2073,7 @@ Releasing the pressure by shedding the excess load may be a more judicious appro
 
 * Exercise: implement load shedding
 
-1. Open `go-course-advanced-labs/src/loadshedding` in VS Code. The program is a simple server that uses a semaphore to limit the number of concurrent requests.
+1. Open `go-course-advanced-labs/loadshedding` in VS Code. The program is a simple server that uses a semaphore to limit the number of concurrent requests.
 
 2. Modify the handler to return an immediate `503`Service`Unavailable` response if the semaphore is at capacity.
 
@@ -2101,7 +2101,7 @@ Watch Rob Pike explain this pattern in [[https://www.youtube.com/watch?v=oV9rvDl
 
 * Redundant requests: an example
 
-1. Open `go-course-advanced-labs/src/redundantreq` in VS Code. The `main` function queries a single data center.
+1. Open `go-course-advanced-labs/redundantreq` in VS Code. The `main` function queries a single data center.
 
 2. Compile the program and time its execution.
 
@@ -2135,7 +2135,7 @@ More about this and similar techniques for taming tail latency in [[https://www.
 
 * Hedged requests: an example
 
-1. Re-open `go-course-advanced-labs/src/redundantreq` in VS Code.
+1. Re-open `go-course-advanced-labs/redundantreq` in VS Code.
 
 2. This time, instead of redundant requests, implement hedged requests. In addition, give up if no response is received before a given deadline.
 
@@ -2198,7 +2198,7 @@ Don't abuse it, though. In particular, using a `sync.Once` to ensure a channel i
 
 * Exercise: reduce a server's startup time with sync.Once
 
-1. Open `go-course-advanced-labs/src/handleronce` in VS Code.
+1. Open `go-course-advanced-labs/handleronce` in VS Code.
 
 2. Inspect the code. Note that the initialization of the `Foo` handler takes much longer than that of the `Bar` handler.
 
@@ -2343,7 +2343,7 @@ However, [[http://mmcloughlin.com/posts/your-pprof-is-showing][for security reas
 
 * Exercise: use net/http/pprof in the namecheck server
 
-1. Open `go-course-advanced-labs/src/namecheck` in VS Code.
+1. Open `go-course-advanced-labs/namecheck` in VS Code.
 
 2. Import `net/http/pprof` in `cmd/server/main.go`.
 
@@ -2406,7 +2406,7 @@ See [[https://blog.gopheracademy.com/advent-2017/go-execution-tracer/][André Ca
 
 * Exercise: use the execution tracer to optimize a fractal generator
 
-1. Open `go-course-advanced-labs/src/mandelbrot` in VS Code.
+1. Open `go-course-advanced-labs/mandelbrot` in VS Code.
 
 2. Time run the program; inspect the image file it creates.
 
@@ -2482,7 +2482,7 @@ One sure way of minimizing padding consists in ordering the fields of your struc
 
 * Exercise: determine and optimize a struct type's memory layout
 
-1. Open `go-course-advanced-labs/src/memorylayout` in VS Code.
+1. Open `go-course-advanced-labs/memorylayout` in VS Code.
 
 2. If you disregard padding, how many bytes does a value of `User` take in memory? What if you include padding?
 
@@ -2564,7 +2564,7 @@ The respective columns correspond to
 
 * Exercise: benchmark an alternative implementation
 
-1. Open `go-course-advanced-labs/src/namecheck` in VS Code.
+1. Open `go-course-advanced-labs/namecheck` in VS Code.
 
 2. While keeping the original `containsNoIllegalPattern` function, write an alternative implementation.
 
@@ -2681,7 +2681,7 @@ Use `go`mod`verify` to detect integrity issues in your CI/CD pipelines.
 
 * Exercise: simulate and detect an integrity issue
 
-1. Open `go-course-advanced-labs/src/namecheck` in VS Code.
+1. Open `go-course-advanced-labs/namecheck` in VS Code.
 
 2. Empty the module cache by running
 
@@ -2827,7 +2827,7 @@ Explicitly set the content type on all responses. Use a middleware if you have t
 
 * Exercise: content sniffing leading to XSS
 
-1. Open `go-course-advanced-labs/src/sniffing` in VS Code.
+1. Open `go-course-advanced-labs/sniffing` in VS Code.
 
 2. After studying the code, start the server.
 
@@ -2882,7 +2882,7 @@ Resources:
 
 * Exercise: path traversal leading to local file inclusion
 
-1. Open `go-course-advanced-labs/src/lfi` in VS Code.
+1. Open `go-course-advanced-labs/lfi` in VS Code.
 
 2. After studying the code, start the server.
 
@@ -2912,7 +2912,7 @@ However, some Go CORS middleware are a bit too helpful for the good of their use
 
 * Exercise: exploit a CORS misconfiguration
 
-1. Open `go-course-advanced-labs/src/cors-misconfig` in VS Code. It contains a minimal Echo server configured for CORS.
+1. Open `go-course-advanced-labs/cors-misconfig` in VS Code. It contains a minimal Echo server configured for CORS.
 
 2. Read [[https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#credentialed_requests_and_wildcards][https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#credentialed_requests_and_wildcards]].
 
