@@ -309,13 +309,13 @@ In most cases, you need to lazily initialize fields within methods on that type.
 
 
 
-* Exercise: make Bimap's zero value useful
+* Exercise: make Bimap's zero value readily usable
 
 1. Re-open `go-course-advanced-labs/src/bidirectionalmap` in VS Code.
 
-2. Is `Bimap`'s zero value usable?
+2. Describe `Bimap`'s zero value.
 
-3. If not, make it usable.
+3. Is `Bimap`'s zero value readily usable? If not, make it so.
 
 4. Get rid of factory function `New`, which is now superfluous.
 
@@ -1056,13 +1056,13 @@ Internal packages are [[https://dave.cheney.net/2019/10/06/use-internal-packages
 
 2. Notice some code duplication between the `twitter` and `github` package.
 
-3. Create a more flexible `IsLongEnough` function in a new `namecheck/internal` package.
+3. In a new `namecheck/internal` package, declare a more flexible `IsLongEnough` function that could be used in both the `twitter` and `github` packages.
 
-4. Make the `twitter` and `github` package use the `internal.IsLongEnough` function instead of their own `isLongEnough` function (which can now be removed).
+4. In the `twitter` and `github` package, use the new `internal.IsLongEnough` function instead of their own `isLongEnough` function (which can now be removed).
 
-5. What other existing package in the project could be made a subpackage of `internal`?
+5. What other existing package in the project could you reasonably move inside the `internal` folder?
 
-.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 150 _
 
 : step 3: add minLen as an extra param
 : stub could be in internal as well, since it's only used in twitter and github, and we don't want people to depend on it
@@ -1376,7 +1376,7 @@ For instance, given the following type declarations,
 
 the following isn't allowed:
 
-  func (t *Tree[E Plusser]) Sum() E // compilation error
+  func (t *Tree[P Plusser]) Sum() P // compilation error
 
 However, you can declare `Sum` as a _function_ rather than as a _method_:
 
@@ -1567,7 +1567,7 @@ This approach for detecting a cancellation signal is useful when your code invol
 
 You can derive a new context from an existing one via one of three factory functions:
 
-  func WithCancel(parent Context) (ctx Context, cancel CancelFunc)
+  func WithCancel(parent Context) (Context, CancelFunc)
   func WithDeadline(parent Context, d time.Time) (Context, CancelFunc)
   func WithTimeout(parent Context, timeout time.Duration) (Context, CancelFunc)
 
@@ -1897,7 +1897,7 @@ Types that are concurrency-safe are advertised as such in their documentation.
 
 * Scatter / gather
 
-This common concurrency pattern has many names, including _fan_out/fan_int_.
+This common concurrency pattern has many names, including _fan_out/fan_in_.
 
 *Scatter*
 
@@ -1952,12 +1952,21 @@ Contrary to scatter/gather, which uses a dedicated goroutine per task, this patt
 
 * Pool of workers (cont'd)
 
+Start a fixed number of _worker_ goroutines:
 
-  nbWorkers := 16
   var wg sync.WaitGroup
-  wg.Add(nbWorkers)
+  wg.Add(16) // 16 workers
   for i := 0; i < nbWorkers; i++ {
     go worker(ch, &wg)
+  }
+
+Each worker continually receives work to do until the channel gets closed:
+
+  func worker(tasks <-chan Task, wg *sync.WaitGroup) {
+    defer wg.Done()
+    for task := range tasks {
+      // carry out the task
+    }
   }
 
 Send work to the worker goroutine via a channel, and then close that channel:
@@ -1967,15 +1976,6 @@ Send work to the worker goroutine via a channel, and then close that channel:
   }
   close(ch)
   wg.Wait()
-
-Each worker goroutine continually receives work to do until the channel gets closed:
-
-  func worker(tasks <-chan Task, wg *sync.WaitGroup) {
-    defer wg.Done()
-    for task := range tasks {
-      // carry out the task
-    }
-  }
 
 
 
@@ -1999,9 +1999,15 @@ Any ideas?
 
 * Counting semaphore
 
-A counting [[https://en.wikipedia.org/wiki/Semaphore_(programming)][semaphore]] limits the number of concurrent accesses to a common resource.
 
-Metaphor: "Due to COVID, no more than n people allowed in the bakery at a time."
+A counting [[https://en.wikipedia.org/wiki/Semaphore_(programming)][semaphore]] is a concurrency pattern that limits the number of concurrent accesses to a common resource. For a concise introduction, watch [[https://www.youtube.com/watch?v=dPkQD1dczws][Valentin Deleplace - Semaphores (dotGo 2019)]].
+
+A familiar metaphor: occupancy limit (e.g. in bakeries) during the COVID health crisis.
+
+.image https://signsmart.com.au/wp-content/uploads/2020/09/covid-maximum-occupancy.jpg 200 _
+
+A counting semaphore is often preferable to a pool of workers, in particular because goroutines are started only as needed; see [[https://www.youtube.com/watch?v=5zXAHh5tJqQ&t=27m][Bryan C. Mills - Rethinking Classical Concurrency Patterns (GopherCon 2018)]].
+
 
 
 

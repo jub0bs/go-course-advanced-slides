@@ -18,10 +18,10 @@ func main() {
 // START OMIT
 func foo(ctx context.Context) error {
 	ticker := time.NewTicker(500 * time.Millisecond) // HL
+	defer ticker.Stop()                              // HL
 	for {
 		select {
 		case <-ctx.Done():
-			ticker.Stop() // HL
 			return ctx.Err()
 		case v := <-ticker.C: // HL
 			fmt.Println(v)
