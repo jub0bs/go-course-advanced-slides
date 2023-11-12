@@ -1504,7 +1504,7 @@ You can start goroutines very easily: all it takes is the `go` keyword.
 
 However, if you're careless, the goroutines you spawn may never terminate.
 
-.play -edit src/uncancellable/main.go /^//START/,/^//END/
+.play -edit src/uncancelable/main.go /^//START/,/^//END/
 
 : everyone ok with go keyword and wait groups?
 
@@ -1520,7 +1520,7 @@ If you're careless and spawn goroutines willy-nilly, you expose yourself to corr
 
 
 
-* Context is for cancellation
+* Context is for cancelation
 
 The `context` package provides a `Context` type.
 
@@ -1531,33 +1531,33 @@ The `context` package provides a `Context` type.
     Value(key any) any
   }
 
-Its primary purpose is to *broadcast*a*cancellation*signal* to child goroutines.
-The cancellation signal may be sent explicitly or time-based.
+Its primary purpose is to *broadcast*a*cancelation*signal* to child goroutines.
+The cancelation signal may be sent explicitly or time-based.
 
 We'll talk about `Context`'s secondary (more controversial) purpose later.
 
 
 
-* Reactive cancellation detection via the Done method
+* Reactive cancelation detection via the Done method
 
-.play -edit src/cancellablechan/main.go /^//START/,/^//END/
+.play -edit src/cancelablechan/main.go /^//START/,/^//END/
 
 
 
-* Reactive cancellation detection via the Err method
+* Reactive cancelation detection via the Err method
 
 The `Err()` method returns `nil` before the context gets canceled or times out,
 and either `context.Canceled` or `context.DeadlineExceeded` afterwards.
 
-.play -edit src/cancellableerr/main.go /^//START/,/^//END/
+.play -edit src/cancelableerr/main.go /^//START/,/^//END/
 
-This approach for detecting a cancellation signal is useful when your code involves no channel communication.
+This approach for detecting a cancelation signal is useful when your code involves no channel communication.
 
 
 
-* Anticipation of cancellation via the Deadline method
+* Anticipation of cancelation via the Deadline method
 
-.play -edit src/cancellabledeadline/main.go /^//START/,/^//END/
+.play -edit src/cancelabledeadline/main.go /^//START/,/^//END/
 
 : if you're about to launch a task that you know will finish after the deadline, you could return immediately instead
 
@@ -1585,26 +1585,26 @@ Important: If you fail to cancel a context that you've derived, you'll leak reso
 
 * Contexts form a tree
 
-In memory, contexts form a tree whose root is a special, uncancellable context, which is returned by the `context.Background()` function.
+In memory, contexts form a tree whose root is a special, uncancelable context, which is returned by the `context.Background()` function.
 
-Cancellation signals flow from top to bottom: cancelling a node of the context tree also cancels all of the contexts derived from it.
+Cancellation signals flow from top to bottom: canceling a node of the context tree also cancels all of the contexts derived from it.
 
 .image img/context_tree.svg 300 _
 
 : child / parent context
-: background isn't cancellable
+: background isn't cancelable
 
 
 
-* Designing a cancellable function/method
+* Designing a cancelable function/method
 
-A function or a method that must be cancellable should accept a `Context` parameter.
+A function or a method that must be cancelable should accept a `Context` parameter.
 
 By convention, that parameter comes first and is named `ctx`:
 
   IsAvailable(ctx context.Context, username string) (bool, error)
 
-Also, a cancellable function/method whose execution is cut short should customarily return the result of `ctx.Err()`:
+Also, a cancelable function/method whose execution is cut short should customarily return the result of `ctx.Err()`:
 
   func Sleep(ctx context.Context, d time.Duration) error
     timer := time.NewTimer(d)
@@ -1626,13 +1626,13 @@ Any of your functions that is
 - IO-bound (e.g. it sends HTTP requests, writes to the DB, ...), or
 - CPU-bound but possibly long-running (e.g. it performs some number crunching),
 
-should be cancellable.
+should be cancelable.
 
 .image https://www.radiofrance.fr/s3/cruiser-production/2021/01/4a643c07-dea4-41ae-afee-b071035a636e/870x489_gettyimages-1278420063.jpg 200 _
 
 
 
-* Exercise: make IsAvailable cancellable
+* Exercise: make IsAvailable cancelable
 
 1. Open `go-course-advanced-labs/namecheck` in VS Code.
 
@@ -1649,7 +1649,7 @@ should be cancellable.
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
 
 : IsAvailable is IO-bound!
-: print the error to check whether it was cancelled
+: print the error to check whether it was canceled
 
 
 
@@ -1659,7 +1659,7 @@ Never use `nil` where a `Context` is required!
 
 If you're unsure which context to use somewhere, avoid using `context.Background()`.
 
-Instead, temporarily use the dummy (uncancellable) context return by the `context.TODO()` function.
+Instead, temporarily use the dummy (uncancelable) context return by the `context.TODO()` function.
 
 Revisit the code later, once you've figured out where to obtain a proper context from.
 
@@ -1675,7 +1675,7 @@ In rare cases, in order not to break an existing API, you may have to store a co
 
 See [[https://go.dev/blog/context-and-structs][Contexts and structs]] on the Golang blog.
 
-The only legitimate use case for storing a context in a struct is when you need to retrofit an existing API for cancellation without altering that API. Example: [[https://pace.dev/blog/2020/02/03/context-aware-ioreader-for-golang-by-mat-ryer.html][making `io.Reader` context-aware]].
+The only legitimate use case for storing a context in a struct is when you need to retrofit an existing API for cancelation without altering that API. Example: [[https://pace.dev/blog/2020/02/03/context-aware-ioreader-for-golang-by-mat-ryer.html][making `io.Reader` context-aware]].
 
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/sage.svg 200 _
 
@@ -1704,22 +1704,25 @@ Notice that, as a result, the handler invocation itself was terminated premature
 
 * Exercise: debug this ping-pong game
 
-1. Open [[https://go.dev/play/p/n7XQ_TdOY4t][this Playground]]. It models a ping-pong game adapted from ([[https://go.dev/talks/2013/advconc.slide#6][a talk by Sameer Ajmani]]).
+1. Open [[https://go.dev/play/p/n7XQ_TdOY4t][this Playground]] adapted from a talk by Sameer Ajmani ([[https://www.youtube.com/watch?v=QDDwwePbDtw&t=2m54][video]]; [[https://go.dev/talks/2013/advconc.slide#6][slides]]).
+The program models a simple ping-pong game.
 
-2. The game ends with a deadlock. Can you see why?
+2. The game ends with a deadlock. Can you explain why?
 
-3. Discuss and fix the programme.
+3. Discuss and fix the program.
 
 Two solutions ([[https://go.dev/play/p/xi2-SMe3xyW][1]] and [[https://go.dev/play/p/yblNr3B5yg7][2]]) are available on the Playground.
 
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
 
+: The `main` goroutine plays the role of the umpire.
 : two goroutines exchanging one value over and over
 : pointer element to reduce memory footprint
 : show that deadlock if you never throw the ball on the table
 : one player terminates while the other is left holding the ball
 : one possibility: buffer size of 1, but no guarantee that the same player will play twice in a row
 : non-blocking send by adding a select statement
+: easy solution: referee receive ball from main after cancel()
 
 
 
@@ -1740,9 +1743,9 @@ The value can later to retrieved via the `Value` method on the context in questi
 
 
 
-* Context: cancellation signal or value bag?
+* Context: cancelation signal or value bag?
 
-The ability to store values in contexts is completely orthogonal to cancellation!
+The ability to store values in contexts is completely orthogonal to cancelation!
 
 Because of its hybrid purpose, the `context.Context` type is quite controversial:
 
@@ -1759,11 +1762,11 @@ Because of its hybrid purpose, the `context.Context` type is quite controversial
 
 Relying on context values suffers from several limitations:
 
+- Functions that overrely on context values have a less expressive API.
 - `WithValue` and `Value` are not typesafe and their use requires some care.
 - There is no compile-time guarantee that a specific value pair will be present.
 - There is no way of enumerating the key-value pairs.
-- Functions that overrely on context values have a less expressive API.
-- Lookup performance can be poor (linked-list implementation).
+- Because contexts form a linked list, lookup performance can be poor.
 
 : poof performance: linked-list implementation
 
