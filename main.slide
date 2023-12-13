@@ -1,23 +1,31 @@
 Formation Go avancé
-9 October 2023
+13 December 2023
 
 Julien Cretel
+
 jcretel-infosec@protonmail.com
+
 https://jub0bs.com
-@jub0bs
 
-* Who I am
+@jub0bs.bsky.social
+https://infosec.exchange/@jub0bs
 
-- Julien Cretel (a.k.a. [[https://twitter.com/jub0bs][@jub0bs]])
+
+
+* About me
+
+- known as @jub0bs on the Web
 - self-employed since 2019
 - Go developer since 2017
 - Web-security researcher & consultant
-- (occasional) bug-bounty hunter
-- trainer (Go & security)
+- occasional bug-bounty hunter
+- trainer on topics such as [[https://www.humancoders.com/formations/go][Go]] and [[https://www.humancoders.com/formations/securite-des-applications-web][Web security]]
 - blogger (at [[https://jub0bs.com][jub0bs.com]])
 
+.image https://habrastorage.org/getpro/habr/post_images/eb1/923/9cc/eb19239cc91d38445932da1ade5a5e7d.png 200 _
+
 : pentests, vulnerability evaluation, code audits
-: present yourselves!
+: introduce yourselves to the other participants in 60 seconds or less
 
 
 
@@ -896,20 +904,35 @@ Either consume it or return it to the caller, but not both. Why not? Discuss.
 
 
 
-* TODO
+* Hard exit outside the main function
 
-- simply concatenating error messages
-- parsing error messages to access contextual information programmatically
-- calling `os.Exit` or `log.Fatal` deep within your program
+Calls to [[https://pkg.go.dev/os#Exit][`os.Exit`]] (and to `log.Fatal`) cause an abrupt end of the program's execution. In particular, [[https://changelog.com/gotime/165#transcript-34][any remaining deferred function calls are ignored]].
 
+Because deferred statements are typically used for clean-up tasks, you run the risk of leaving your system in an unclean state if you call `os.Exit` deep in the stack.
+
+.play -edit src/os_exit.go /^//START/,/^//END/
+
+
+
+* Hard exit outside the main function (cont'd)
+
+Instead, limit yourself to calling `os.Exit` and `log.Fatal` only in the `main` function.
+
+.play -edit src/os_exit_fixed.go /^//START/,/^//END/
+
+In fact, [[https://pace.dev/blog/2020/02/12/why-you-shouldnt-use-func-main-in-golang-by-mat-ryer.html][Mat Ryer recommends keeping the `main` function as small as possible]].
+
+
+
+: TODO: simply concatenating error messages
+: TODO: parsing error messages to access contextual information programmatically
 : concat (advocated in gopl): forces your clients to parse your error messages.
-: os.Exit doesn't honor deferred calls
 
 
 
 * Panicking for no good reason
 
-A panic typically indicates a programming error or some a fatal failure. Do not panic in your functions for anticipated and mundane failures:
+A panic typically indicates a programming error or some fatal failure. Do not panic in your functions for anticipated and mundane failures:
 
 - a file couldn't be opened
 - a HTTP request failed
@@ -939,7 +962,7 @@ However, you should be careful about which panics you recover from, as the progr
 
 
 
-* Advanced error handling
+* Good error-handling practices
 
 
 
@@ -959,14 +982,10 @@ The easy way is to use the `%w` format directive:
       return fmt.Errorf("failure to check username availability: %w", err)
   }
 
-To provide more information, declare your own type that satisfies `error` and `wrapper`:
-
-  type error interface {
-    Error() string
-  }
+To provide more information, declare your own type that satisfies [[https://pkg.go.dev/builtin#error][the `error` interface]] but also the `wrapper` interface, which [[https://pkg.go.dev/errors][the `errors` package]] relies on for chaining errors:
 
   type wrapper interface {
-    Unwrap() error
+    Unwrap() error // or []error
   }
 
 : since Go 1.13
