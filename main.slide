@@ -1,5 +1,5 @@
 Formation Go avancé
-13 December 2023
+25th September 2024
 
 Julien Cretel
 
@@ -53,7 +53,7 @@ If you need to add a line break somewhere, make sure [[https://github.com/golang
 
 * Setup
 
-- Go 1.21.x
+- Go 1.23.x
 - Visual Studio Code
 - [[https://code.visualstudio.com/docs/languages/go][Go extension for Visual Studio Code]]
 - Git
@@ -193,7 +193,7 @@ An example from the `regexp` package:
       // contains filtered or unexported fields
   }
 
-  func (*Regexp) MatchString(
+  func (*Regexp) MatchString(string)
 
 If instantiating your type requires some configuration, export _factory_function(s)_ for it:
 
@@ -643,7 +643,7 @@ And because the signature of `Open` doesn't change, you would only need to relea
 
 2. Declare a factory function named `WithTimeout` that has a `time.Duration` parameter and returns an `Option`.
 
-3. Make the `apply` methods of your new option return a non-nil error if the specified `time.Duration` value is not positive.
+3. Make the `apply` method of your new option return a non-nil error if the specified `time.Duration` value is not positive.
 
 4. Finally, in the call to `Open` in the `main` function, use your new timeout option.
 Try a positive and then a nonpositive value.
@@ -1445,15 +1445,13 @@ However, `comparable` can only be used as a type constraint, not as a type!
 
 * Two useful packages for reducing boilerplate
 
-The [[https://pkg.go.dev/golang.org/x/exp/slices][golang.org/x/exp/slices package]] provides various functions useful with slices of any type, such as one for sorting a slice:
+The [[https://pkg.go.dev/slices][`slices` package]] provides various functions useful with slices of any type, such as one for checking equality between two slices:
 
-  func Sort[E constraints.Ordered](x []E)
+  func Equal[S ~[]E, E comparable](s1, s2 S) bool
 
-The [[https://pkg.go.dev/golang.org/x/exp/maps][golang.org/x/exp/maps package]] provides various functions useful with maps of any type, such as one that returns a slice containing the keys of a given map:
+The [[https://pkg.go.dev/maps][`maps` package]] provides various functions useful with maps of any type, such as one for checking equality between two maps:
 
-  func Keys[M ~map[K]V, K comparable, V any](m M) []K
-
-Along with the golang.org/x/exp/constraints package, those two packages will likely be rolled in a future version.
+  func Equal[M1, M2 ~map[K]V, K, V comparable](m1 M1, m2 M2) bool
 
 
 
@@ -1507,6 +1505,253 @@ Just because Go has generics doesn't mean that every type and function should be
 - [[https://go.dev/doc/tutorial/generics][Tutorial: Getting started with generics (2022)]]
 - [[https://www.youtube.com/watch?v=eU-w2psAvdA][Roger Peppe - Generics Unconstrained (GopherCon UK 2022)]]
 - [[https://www.youtube.com/watch?v=-F2t3oInqKE][Cameron Balahan & Cody Oss - Refactor Cloud applications in Go 1.18 with generics (Google I/O 2022)]]
+
+
+
+* Iterators
+
+
+
+* Purpose of iterators
+
+_Provide_a_way_to_access_the_elements_of_an_aggregate_object_sequentially_without_exposing_its_underlying_representation._
+
+.image img/gof_book.png 300 _
+
+In this context, an _aggregate_object_ is to be understood as a _data_structure_, a _container_, a _collection_of_elements_, etc.
+
+: Theoretical examples of iterators: the runes of a string, keys of a map, traversal of binary tree
+
+
+
+* Iterators vs slices
+
+An alternative to iterators is simply to expose the sequence of elements as some built-in composite type, such as a slice:
+
+  func Runes(s string) []rune { return []rune(s) }
+
+In comparison,
+
+- iterators are more flexible (callers can stop iteration at any stage);
+- iterators are more performant (callers process elements one at a time, and need not bring the whole sequence of elements in memory);
+- iterators require less defensive copying for encapsulation (whereas returning an internal slice opens the door to aliasing bugs).
+
+.image https://miro.medium.com/v2/resize:fit:4800/1*-bo7H329eM0O1eL_ASBVOA.jpeg 150 _
+
+
+
+* Iterators in Go before Go 1.23
+
+There used to be no standard way to iterate over an aggregate object.
+
+In practice, different packages would adopt various APIs and semantics, even within the standard library.
+
+Or library authors would not provide iteration and would instead expose the whole sequence of elements as a slice. Here is an example from the experimental [[https://golang.org/x/exp/maps][golang.org/x/exp/maps]] package:
+
+  // Keys returns the keys of the map m.
+  // The keys will be in an indeterminate order.
+  func Keys[M ~map[K]V, K comparable, V any](m M) []K {
+    r := make([]K, 0, len(m))
+    for k := range m {
+      r = append(r, k)
+    }
+    return r
+  }
+
+
+
+* Iterators in Go 1.23
+
+Go 1.23 has now standardized iteration through [[https://go.dev/ref/spec#For_range][a language change]] and the addition of [[https://pkg.go.dev/iter][the `iter` package]] in the standard library.
+
+Iterators come in two useful forms: `iter.Seq[V]` and `iter.Seq2[K,`V]`. You can _range_over_ values of those types in a loop!
+
+A value of type `iter.Seq[V]` yields one iteration variable of type `V`,
+
+  for v := range someSeq {
+    // do something with v; break early if needed
+  }
+
+whereas a value of type `iter.Seq2[K,`V]` yields two iteration variables of type `K` and `V`.
+
+  for k, v := range someSeq2 {
+    // do something with k and v; break early if needed
+  }
+
+
+
+* Exercise: iterate over the keys of a map
+
+1. Open [[https://go.dev/play/p/hs_aNuVHXP8][this Playground]].
+
+2. Look up the documentation of the `Keys` function in the `golang.org/x/exp/maps` package. Discuss.
+
+3. Now look up the documentation of the `Keys` function in the standard library's `maps` package.
+
+4. In your Playground, replace the former function (2) by the latter function (3).
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Iterator factory functions in the standard library
+
+With the release of Go 1.23, several convenient functions that return iterators were added in the standard library, in particular in the slices and maps package.
+
+Look up the documentation of those packages and get familiar with those new functions.
+
+More iterator factory functions will likely be added in future versions of Go, in particular in the strings, bytes, and regexp packages.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/friends/heart-hug.svg 200 _
+
+
+
+* Iterators under the hood
+
+You may want to provide iterators over your own custom types (e.g. a binary tree).
+
+For that, you'll need to understand how iterators work under the hood. The `iter` package declares the two iterator types as follows:
+
+  type Seq[V any]     func(yield func(V) bool)
+  type Seq2[K, V any] func(yield func(K, V) bool)
+
+An `iter.Seq[V]` iterator is a function that "pushes" successive V elements of a sequence to a unary callback function that returns a boolean.
+
+And an `iter.Seq2[V]` iterator is a function that "pushes" successive K-V pairs of a sequence to a binary callback function that returns a boolean.
+
+In both cases,
+
+- the callback function is conventionally named "yield";
+- the `yield` function returns `true` if the iterator should continue with the next element/pair in the sequence, or `false` if it should stop.
+
+
+
+* Example: maps.Keys under the hood
+
+A simple but illustrative example of an `iter.Seq` is that returned by [[https://pkg.go.dev/maps#Keys][the `maps.Keys` function]]:
+
+  func Keys[M ~map[K]V, K comparable, V any](m M) iter.Seq[K] {
+    return func(yield func(K) bool) {
+      for k := range m {
+        if !yield(k) {
+          return
+        }
+      }
+    }
+  }
+
+Note that the resulting function
+
+- passes each map key to `yield`, and
+- returns early if `yield` returns `false`.
+
+
+
+* Example: maps.All under the hood
+
+A simple but illustrative example of an `iter.Seq2` is that returned by [[https://pkg.go.dev/maps#All][the `maps.All` function]]:
+
+  func All[M ~map[K]V, K comparable, V any](m M) iter.Seq2[K, V] {
+    return func(yield func(K, V) bool) {
+      for k, v := range m {
+        if !yield(k, v) {
+          return
+        }
+      }
+    }
+  }
+
+Again, note that the resulting function
+
+- passes each map key-value pair to `yield`, and
+- returns early if `yield` returns `false`.
+
+
+
+* Exercise: in-order traversal of a binary tree
+
+1. Open [[https://go.dev/play/p/buKtMDze2_8][this Playground]].
+
+2. It contains a stub implementation of a method named `All`, which is meant to return an iterator that performs an [[https://en.wikipedia.org/wiki/Tree_traversal#In-order,_LNR][in-order traversal]] of the tree.
+
+3. Implement `All` for real.
+
+4. Is "All" a good name? If not, what would you name the function instead?
+
+A solution is available in [[https://go.dev/play/p/kvcps2X3ZLQ][this Playground]].
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+: you may want to provide other traversals; better name this one "InOrder"
+
+
+
+* Iterators need not be finite
+
+Most iterators, like `maps.Keys` and `maps.All`, yield a finite sequence of elements/pairs.
+
+But iterators may very well yield an infinite sequence!
+
+For instance, you could implement an iterator that yields the sequence of prime numbers in increasing order.
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/fairy-tale/sage.svg 200 _
+
+
+
+* Exercise: implement a function that returns an infinite iterator
+
+1. Open [[https://go.dev/play/p/mOPcdvScBI3][this Playground]].
+
+2. It contains a stub implementation of a function named `Repeat`, which is meant to return an iterator that repeatedly yields the same value: its argument.
+
+3. Implement `Repeat` for real.
+
+A solution is available in [[https://go.dev/play/p/KJ0Z9Zp4-iS][this Playground]].
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Pull iterators
+
+The iterators we've covered so far are known as _push_operators_, because each successive element/pair is "pushed" to the `yield` function.
+
+Such iterators are not appropriate if you wish to simultaneously iterate over multiple aggregate objects. For such tasks, you should use a _pull_iterator_.
+
+A pull iterator corresponding to a `iter.Seq[V]` is a pair of functions:
+
+  next() (V, bool) // yields the next element (if any) in the sequence
+  stop()           // ends iteration; should be called to prevent leaking the iterator
+
+You almost never want or need to implement a pull iterator by hand. Instead, you typically derive a pull-based iterator from an existing push-based one via [[https://pkg.go.dev/iter#Pull][function `iter.Pull`]].
+
+: TODO: cover Seq2 also
+: TODO: talk about leaking pull iterators
+
+
+
+* Exercise: check whether two trees have the same in-order traversal
+
+1. Open [[https://go.dev/play/p/tYANN0JiIMv][this Playground]].
+
+2. It contains a stub implementation of a function named `SameInOrder`, which is meant to report whether the two trees have the same in-order traversal.
+
+3. What would be a naive way of implementing `SameInOrder`? Why wouldn't it be ideal?
+
+4. Implement `SameInOrder` using pull iterators.
+
+A solution is available in [[https://go.dev/play/p/8yTGW3XeDpm][this Playground]].
+
+.image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 200 _
+
+
+
+* Resources about iterators
+
+- [[https://tip.golang.org/doc/go1.23#iterators][Go 1.23 release notes]]
+- [[https://go.dev/blog/range-functions][Ian Lance Taylor - Range over function types (Go blog)]]
+- [[https://go.dev/ref/spec#For_range][For statements with range clause (language spec)]]
+- [[https://github.com/jub0bs/iterutil][github.com/jub0bs/iterutil: a collection of utility functions for iterators]]
 
 
 
@@ -1593,7 +1838,7 @@ You can derive a new context from an existing one via one of three factory funct
 The `CancelFunc`-typed result, which is simply a `func()`, *must* be called at some stage.
 The best thing to do is call it with `defer` and forget about it:
 
-  ctx, cancel = context.WithCancel(ctx)
+  ctx, cancel := context.WithCancel(ctx)
   defer cancel()
 
 Important: If you fail to cancel a context that you've derived, you'll leak resources.
@@ -1625,7 +1870,7 @@ By convention, that parameter comes first and is named `ctx`:
 
 Also, a cancelable function/method whose execution is cut short should customarily return the result of `ctx.Err()`:
 
-  func Sleep(ctx context.Context, d time.Duration) error
+  func Sleep(ctx context.Context, d time.Duration) error {
     timer := time.NewTimer(d)
     defer timer.Stop()
     select {
@@ -1706,16 +1951,15 @@ The only legitimate use case for storing a context in a struct is when you need 
 
 1. Open `go-course-advanced-labs/namecheck` in VS Code.
 
-2. Consult the `net/http` doc to figure out how to extract a context from a HTTP request inside a handler.
+2. Find out how to extract a context from a HTTP request inside a handler. In `cmd/server/main.go`, pass that context to `IsAvailable`.
 
-3. In `cmd/server/main.go`, pass that context to `IsAvailable`.
+3. To better observe the effects of cancelation, temporarily modify the `select` case that receives on the error channel: print the received error to stdout before returning.
 
 4. Start the server, exercise the `check` endpoint with `curl` and quickly press `^C`:
 
-  curl -v http://localhost:8080/check?username=toto
-  ^C
+  $ curl -v http://localhost:8080/check?username=toto # then ^C
 
-Notice that, as a result, the handler invocation itself was terminated prematurely.
+Note how the handler invocation terminates early with a `context.Canceled` error.
 
 .image https://raw.githubusercontent.com/egonelbre/gophers/master/vector/superhero/gotham.svg 150 _
 
@@ -2045,7 +2289,7 @@ Acquire and release a "token" before and after each access to the resource:
   sem <- token{} // acquire a token
   go func() {
     defer func() {<-sem}() // release the token
-    // ... 
+    // ...
   }()
 Each send operation only proceeds when the channel's buffer is not full.
 
@@ -2167,17 +2411,13 @@ More about this and similar techniques for taming tail latency in [[https://www.
 
 
 
-* Quiz: is there a synchronization bug?
-
-Is there a data race in the following program? Why or why not?
+* Quiz: is there a synchronization bug? Why or why not?
 
 .play -edit src/concurrentslice/main_race.go /^//START/,/^//END/
 
 
 
-* Quiz: is there a synchronization bug? (cont'd)
-
-What about the following program? Why or why not?
+* Quiz: is there a synchronization bug? Why or why not? (cont'd)
 
 .play -edit src/concurrentslice/main_no_race.go /^//START/,/^//END/
 
@@ -2430,7 +2670,7 @@ See [[https://blog.gopheracademy.com/advent-2017/go-execution-tracer/][André Ca
 
 1. Open `go-course-advanced-labs/mandelbrot` in VS Code.
 
-2. Time run the program; inspect the image file it creates.
+2. Time the program's execution; inspect the resulting image file.
 
 3. Trace the program's execution. Suggest changes for improving performance.
 
@@ -2541,7 +2781,7 @@ The _operation_ to benchmark is performed within a loop controlled by `b.N`:
 
   func BenchmarkContainsNoIllegalPattern(b *testing.B) {
     usernames := []string{"", "jub0bs", "abcTwitTerabd"}
-    for i := 0; i < b.N; i++ {
+    for range b.N {
       for _, username := range usernames {
         containsNoIllegalPattern(username)
       }
